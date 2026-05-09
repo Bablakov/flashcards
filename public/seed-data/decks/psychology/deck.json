@@ -1,0 +1,16 @@
+{
+  "id": "psychology",
+  "name": "Психология",
+  "color": "#7c3aed",
+  "settings": {
+    "frontLanguage": "ru",
+    "backLanguage": "ru",
+    "frontSpeechSpeed": 1,
+    "backSpeechSpeed": 1,
+    "flipDelay": 0,
+    "nextDelay": 0
+  },
+  "cardCount": 0,
+  "createdAt": "2026-05-08T23:06:15.013Z",
+  "updatedAt": "2026-05-08T23:06:15.013Z"
+}

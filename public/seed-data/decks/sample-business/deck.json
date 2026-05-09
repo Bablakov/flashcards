@@ -1,0 +1,16 @@
+{
+  "id": "sample-business",
+  "name": "Пример: Бизнес",
+  "color": "#e36b6b",
+  "settings": {
+    "frontLanguage": "en",
+    "backLanguage": "ru",
+    "frontSpeechSpeed": 1,
+    "backSpeechSpeed": 1,
+    "flipDelay": 0,
+    "nextDelay": 0
+  },
+  "cardCount": 3,
+  "createdAt": "2026-05-08T23:06:15.009Z",
+  "updatedAt": "2026-05-08T23:06:15.009Z"
+}

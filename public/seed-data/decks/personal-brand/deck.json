@@ -1,0 +1,16 @@
+{
+  "id": "personal-brand",
+  "name": "Личный бренд",
+  "color": "#f59e0b",
+  "settings": {
+    "frontLanguage": "ru",
+    "backLanguage": "ru",
+    "frontSpeechSpeed": 1,
+    "backSpeechSpeed": 1,
+    "flipDelay": 0,
+    "nextDelay": 0
+  },
+  "cardCount": 0,
+  "createdAt": "2026-05-08T23:06:15.013Z",
+  "updatedAt": "2026-05-08T23:06:15.013Z"
+}

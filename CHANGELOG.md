@@ -1,0 +1,161 @@
+# CHANGELOG
+
+## v0.1.0 — 2026-05-09 — Initial release
+
+Первая работающая версия редактора флешкарт с Git-синхронизацией, собранная по 15
+скриншотам и CSV-шаблону из `documentation/`. Полностью клиентское SPA на Next.js,
+данные хранятся в IndexedDB и синхронизируются с Git-репозиторием через
+`isomorphic-git` без сервера.
+
+### Стек
+
+- **Next.js 15** (App Router, `output: "export"`) + **React 19** + **TypeScript** —
+  тот же стек, что в соседних `quiz-admin-panel` и `personal-finances`.
+- **Tailwind CSS 3** — тёмная тема под референсное Android-приложение.
+- **isomorphic-git** + **@isomorphic-git/lightning-fs** — Git клиент в браузере поверх
+  виртуальной FS на IndexedDB.
+- **Zod** — валидация всех структур (Deck, Card, GitConfig).
+- **PapaParse** — импорт/экспорт CSV.
+- **Capacitor 7** — обёртка в Android APK.
+- **lucide-react** — иконки.
+
+### Что реализовано
+
+#### Главный экран (`app/page.tsx`)
+- Список колод с цветной меткой, прогрессом запоминания и количеством карточек.
+- Контекстное меню: переименовать / сменить цвет / удалить.
+- Кнопка «Добавить колоду» и «Синхронизация» в нижней панели.
+- Бейдж с числом несинхронизированных файлов.
+- Авто-импорт seed-колод на первом запуске (из `public/seed-data/`).
+
+#### Экран колоды (`app/deck/page.tsx`)
+- Превью обеих сторон каждой карточки (текст + миниатюра изображения + аудио-плеер).
+- Глобальный поиск по тексту обеих сторон.
+- 8 режимов сортировки: пользовательский, перемешать, дата ↑/↓, А-Я / Я-А, уровень ↑/↓.
+- Кнопки в нижней панели: тест, добавить, импорт CSV, экспорт CSV, опции колоды.
+
+#### Редактор карточки (`app/card/page.tsx`)
+- Текст лицевой и обратной стороны (textarea с авто-рост).
+- Изображение с **камеры** (capture=environment) или **из файла** для каждой стороны.
+- **Запись аудио** через `MediaRecorder` с таймером и предпросмотром.
+- Уровень запоминания **0-6** (0 = «не установлен», как в референсе) с цветными чипами.
+- Произвольные теги.
+- Кнопки **Сохранить** и **Удалить** в шапке.
+
+#### Тест-режим (`app/study/page.tsx`)
+- Карточки выдаются в перемешанном порядке.
+- Один клик — переворот лицевая ↔ обратная.
+- Озвучка через `SpeechSynthesis` с использованием языка стороны из настроек колоды.
+- Стрелки prev/next, переоценка уровня прямо в процессе.
+
+#### Опции колоды (`app/options/page.tsx`)
+- Скорость озвучки лицевой и обратной стороны (0.5x — 2x).
+- Языки сторон (ru/en/de/es/fr).
+- Задержка перед переворотом и перед следующей карточкой.
+
+#### Глобальный поиск (`app/search/page.tsx`)
+- Поиск по всем колодам и обеим сторонам, прямые ссылки на редактор найденной карточки.
+
+#### Git-настройки (`app/settings/page.tsx`)
+- URL репо, ветка, имя/email, Personal Access Token (хранится в localStorage).
+- Кнопки **Клонировать**, **Sync (pull + push)**, **Удалить локальные данные**.
+- Статус: инициализирован ли репо, число несинхронизированных файлов, время последней синхронизации.
+- Inline-инструкция как создать репо и токен.
+
+### Слой данных
+
+| Модуль | Назначение |
+|---|---|
+| `lib/types.ts` | Zod-схемы `Deck`, `Card`, `CardSide`, `DeckSettings`, `GitConfig`, `SyncStatus`, `MemoryLevel` |
+| `lib/fs.ts` | Обёртка над `LightningFS`: `readJson`/`writeJson`/`readBytes`/`writeBytes`/`ensureDir`/`removePath`. Корень = `/repo`. |
+| `lib/repository.ts` | CRUD по колодам и карточкам (read/save с валидацией через Zod), сохранение медиа в `media/<cardId>_<side>_<kind>.<ext>` |
+| `lib/git.ts` | `isomorphic-git` обёртка: `clone`, `commit`, `pull`, `push`, `syncAll` (commit → pull → push с обработкой merge-конфликтов и не-fast-forward) |
+| `lib/csv.ts` | Импорт CSV в формате `Front side,Back side` (как в `documentation/Flashcards.csv`), экспорт обратно |
+| `lib/media.ts` | `MediaRecorder` для аудио, конвертация `File`/`Blob` → `Uint8Array` |
+| `lib/settings.ts` | `GitConfig` и `SyncStatus` в `localStorage` |
+| `lib/seed.ts` | Авто-импорт `public/seed-data/` в IndexedDB при первом запуске, если у пользователя ещё нет колод |
+| `lib/cn.ts` | `clsx` + `tailwind-merge` |
+
+### Формат данных в репозитории
+
+```
+decks/
+  <deckId>/
+    deck.json                       — имя, цвет, settings, cardCount, timestamps
+    cards.json                      — массив карточек
+    media/
+      <cardId>_<side>_<kind>.<ext>  — изображения и аудио
+```
+
+### Маршруты
+
+Все маршруты — flat, на query-параметрах: `/`, `/deck?id=`, `/card?deck=&id=`,
+`/study?deck=`, `/options?deck=`, `/settings`, `/search`. Это нужно для статического
+экспорта без `generateStaticParams`.
+
+### Сборка и запуск
+
+| Скрипт | Что делает |
+|---|---|
+| `start-dev.bat` | Двойной клик: install (если нужно) → seed → `next dev --port 3210` → открыть браузер |
+| `start-prod.bat` | install → seed → `next build` → `serve out -l 3210` |
+| `build-android.bat` | install → seed → build → `cap add android` → `cap sync` → открыть Android Studio |
+| `npm run dev` | Dev-сервер на :3210 |
+| `npm run build` | Статический экспорт в `out/` |
+| `npm run seed` | Генерирует `public/seed-data/` из `documentation/Flashcards.csv` (4 колоды, одна с 3 карточками) |
+| `npm run preview` | `serve out -l 3210` |
+| `npm run cap:add:android` | Добавить Android-платформу (один раз) |
+| `npm run cap:sync` | build + cap sync |
+| `npm run cap:open:android` | Открыть Android Studio |
+
+### Seed (`scripts/seed.mjs`)
+
+Читает `documentation/Flashcards (1) (2).csv`, парсит вручную (CSV с кавычками,
+без зависимостей в Node-скрипте), генерирует:
+
+- `public/seed-data/decks/sample-business/{deck.json, cards.json, media/}` — 3 карточки cat/apple/song
+- `public/seed-data/decks/{psychology, gamedev, personal-brand}/` — пустые колоды по теме скриншотов
+- `public/seed-data/manifest.json` — индекс колод
+
+При первом запуске `app/page.tsx` вызывает `maybeInstallSeed()` — если IndexedDB пустой,
+seed копируется в `/repo/decks/...` и помечается флагом в localStorage, чтобы повторно
+не заливать.
+
+### PWA
+
+- `public/manifest.json` с темной темой и портретной ориентацией.
+- SVG-иконки 192×192 и 512×512 в `public/`.
+- Чистый статический экспорт — устанавливается на любой телефон через «Добавить на главный экран».
+
+### Android (Capacitor)
+
+- `capacitor.config.ts` с `appId: com.kirill.flashcards`, `webDir: out`.
+- `build-android.bat` берёт на себя все шаги до открытия Android Studio.
+- Подписание APK и сборка release делаются вручную в Android Studio (один раз настраивается keystore).
+
+### Документация
+
+- `README.md` — обзор стека, формата данных, запуск, структура.
+- `SETUP.md` — пошаговая инструкция «что я сделал автоматически» / «что осталось пользователю»,
+  включая создание GitHub-репо, генерацию PAT, подключение второго устройства, деплой сайта.
+- `CHANGELOG.md` — этот файл.
+- `documentation/` — оригинальные скриншоты и CSV-шаблон, оставленные как референс.
+
+### Известные ограничения
+
+- Конфликты слияния `cards.json` не разрешаются автоматически — при гонке коммитов
+  второй пуш отклоняется, надо нажать Sync ещё раз.
+- Бинарные файлы (изображения, аудио) хранятся прямо в Git без LFS — норм для пары сотен
+  карточек, для тысяч стоит подключить Git LFS или вынести media в S3/R2.
+- Запись аудио требует HTTPS или localhost — на голом IP по сети браузер не даст доступ к
+  микрофону. Для прода через интернет нужен https-домен.
+- Capacitor подключён, но Android-проект и keystore генерируются на стороне пользователя
+  через Android Studio — нет CI на GitHub Actions для автоматической сборки APK.
+
+### Что НЕ сделано (намеренно, для v0.2)
+
+- Spaced repetition (SRS, как в Anki) — сейчас уровень меняется только вручную.
+- Three-way merge для `cards.json` — нет автоматического разрешения конфликтов.
+- Capacitor Filesystem plugin — на телефоне media лежит в IndexedDB, а не в реальной папке.
+- Светлая тема и кастомизация фона колоды.
+- GitHub Actions для авто-сборки и деплоя сайта.

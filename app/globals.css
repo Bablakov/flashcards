@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    background: #1a1a1a;
+    color: #e5e5e5;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+  :root {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  .deck-tile {
+    @apply relative rounded-2xl bg-bg-card px-6 py-10 shadow-md ring-1 ring-white/5 transition hover:ring-accent/40;
+  }
+  .icon-btn {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl text-neutral-200 hover:bg-white/5;
+  }
+  .pill-button {
+    @apply inline-flex items-center gap-2 rounded-xl bg-bg-soft px-4 py-2 text-sm font-medium text-neutral-200 ring-1 ring-white/5 hover:bg-white/5;
+  }
+  .field {
+    @apply w-full rounded-xl bg-bg-soft px-4 py-3 text-base text-neutral-100 outline-none ring-1 ring-white/5 placeholder:text-neutral-500 focus:ring-accent/60;
+  }
+}

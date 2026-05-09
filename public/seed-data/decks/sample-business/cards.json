@@ -1,0 +1,59 @@
+[
+  {
+    "id": "fd5yfc8ijs",
+    "front": {
+      "text": "cat",
+      "image": null,
+      "audio": null
+    },
+    "back": {
+      "text": "animal",
+      "image": null,
+      "audio": null
+    },
+    "level": 0,
+    "tags": [
+      "sample"
+    ],
+    "createdAt": "2026-05-08T23:06:15.009Z",
+    "updatedAt": "2026-05-08T23:06:15.009Z"
+  },
+  {
+    "id": "qw3qxfxess",
+    "front": {
+      "text": "apple",
+      "image": null,
+      "audio": null
+    },
+    "back": {
+      "text": "fruit",
+      "image": null,
+      "audio": null
+    },
+    "level": 0,
+    "tags": [
+      "sample"
+    ],
+    "createdAt": "2026-05-08T23:06:15.009Z",
+    "updatedAt": "2026-05-08T23:06:15.009Z"
+  },
+  {
+    "id": "eu66czdajw",
+    "front": {
+      "text": "song",
+      "image": null,
+      "audio": null
+    },
+    "back": {
+      "text": "music",
+      "image": null,
+      "audio": null
+    },
+    "level": 0,
+    "tags": [
+      "sample"
+    ],
+    "createdAt": "2026-05-08T23:06:15.009Z",
+    "updatedAt": "2026-05-08T23:06:15.009Z"
+  }
+]
