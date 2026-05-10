@@ -3,29 +3,141 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-base: #1a1a1a;
+    --bg-soft: #262626;
+    --bg-card: #2d2d2d;
+    --text-primary: #f4f4f5;
+    --text-secondary: #d4d4d8;
+    --text-muted: #a1a1aa;
+    --text-faint: #71717a;
+    --ring-base: rgba(255, 255, 255, 0.05);
+    --ring-strong: rgba(255, 255, 255, 0.15);
+    --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --accent: #e36b6b;
+    color-scheme: dark;
+  }
+  :root.theme-light {
+    --bg-base: #f5f5f7;
+    --bg-soft: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #18181b;
+    --text-secondary: #27272a;
+    --text-muted: #52525b;
+    --text-faint: #a1a1aa;
+    --ring-base: rgba(0, 0, 0, 0.06);
+    --ring-strong: rgba(0, 0, 0, 0.18);
+    --shadow-card: 0 8px 24px rgba(20, 20, 30, 0.08);
+    --accent: #d94a4a;
+    color-scheme: light;
+  }
   html,
   body {
-    background: #1a1a1a;
-    color: #e5e5e5;
+    background: var(--bg-base);
+    color: var(--text-primary);
     height: 100%;
     -webkit-font-smoothing: antialiased;
-  }
-  :root {
-    color-scheme: dark;
   }
 }
 
 @layer components {
-  .deck-tile {
-    @apply relative rounded-2xl bg-bg-card px-6 py-10 shadow-md ring-1 ring-white/5 transition hover:ring-accent/40;
+  .deck-card {
+    @apply relative flex flex-col overflow-hidden rounded-2xl text-left transition;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--ring-base);
+  }
+  .deck-card:hover {
+    border-color: var(--ring-strong);
+  }
+  .card-tile {
+    @apply relative flex w-full flex-col overflow-hidden rounded-2xl text-left transition;
+    background: var(--bg-card);
+    border: 1px solid var(--ring-base);
+    min-height: 180px;
+  }
+  .card-tile:hover {
+    border-color: var(--ring-strong);
   }
   .icon-btn {
-    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl text-neutral-200 hover:bg-white/5;
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl transition;
+    color: var(--text-primary);
+  }
+  .icon-btn:hover {
+    background: var(--ring-base);
   }
   .pill-button {
-    @apply inline-flex items-center gap-2 rounded-xl bg-bg-soft px-4 py-2 text-sm font-medium text-neutral-200 ring-1 ring-white/5 hover:bg-white/5;
+    @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition;
+    background: var(--bg-soft);
+    color: var(--text-primary);
+    border: 1px solid var(--ring-base);
+  }
+  .pill-button:hover {
+    border-color: var(--ring-strong);
+  }
+  .pill-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   .field {
-    @apply w-full rounded-xl bg-bg-soft px-4 py-3 text-base text-neutral-100 outline-none ring-1 ring-white/5 placeholder:text-neutral-500 focus:ring-accent/60;
+    @apply w-full rounded-xl px-4 py-3 text-base outline-none;
+    background: var(--bg-soft);
+    color: var(--text-primary);
+    border: 1px solid var(--ring-base);
   }
+  .field::placeholder {
+    color: var(--text-faint);
+  }
+  .field:focus {
+    border-color: var(--accent);
+  }
+  .lang-chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium;
+    background: var(--ring-base);
+    color: var(--text-secondary);
+  }
+  .modal-backdrop {
+    @apply fixed inset-0 z-40 flex items-end justify-center bg-black/60 px-3 pb-3 backdrop-blur-sm sm:items-center sm:pb-0;
+  }
+  .modal-panel {
+    @apply w-full max-w-md overflow-hidden rounded-2xl;
+    background: var(--bg-soft);
+    color: var(--text-primary);
+    border: 1px solid var(--ring-base);
+    box-shadow: var(--shadow-card);
+  }
+  .menu-panel {
+    @apply absolute z-30 w-52 overflow-hidden rounded-xl;
+    background: var(--bg-card);
+    border: 1px solid var(--ring-base);
+    box-shadow: var(--shadow-card);
+  }
+  .menu-item {
+    @apply flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition;
+    color: var(--text-primary);
+  }
+  .menu-item:hover {
+    background: var(--ring-base);
+  }
+}
+
+.flip-card {
+  perspective: 1500px;
+}
+.flip-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.flip-face.back {
+  transform: rotateY(180deg);
 }

@@ -8,6 +8,7 @@ import { loadGitConfig, loadSyncStatus, saveGitConfig } from "@/lib/settings";
 import { syncAll, clone, isInitialized, pendingChangesCount } from "@/lib/git";
 import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
+import { useTheme } from "@/components/ThemeProvider";
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState<GitConfig>(() => GitConfigSchema.parse({}));
@@ -15,6 +16,7 @@ export default function SettingsPage() {
   const [hasRepo, setHasRepo] = useState(false);
   const [pending, setPending] = useState(0);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     setCfg(loadGitConfig());
@@ -85,11 +87,26 @@ export default function SettingsPage() {
     <>
       <TopBar back title="Настройки" rightSlot={<div className="w-10" />} />
       <main className="flex-1 px-4 pb-12 pt-2">
-        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-white/5">
-          <div className="flex items-center gap-2 text-lg font-semibold">
+        <section className="mb-6 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="mb-3 text-lg font-semibold text-text-primary">Внешний вид</div>
+          <div className="flex gap-2">
+            {(["dark", "light"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTheme(t)}
+                className={`flex-1 rounded-xl px-4 py-3 text-sm font-medium transition ${theme === t ? "bg-[var(--accent)]/15 text-[var(--accent)] ring-1 ring-[var(--accent)]/40" : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"}`}
+              >
+                {t === "dark" ? "🌙 Тёмная" : "☀️ Светлая"}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="flex items-center gap-2 text-lg font-semibold text-text-primary">
             <GitBranch size={18} /> Git синхронизация
           </div>
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-text-muted">
             Введи URL Git-репозитория (HTTPS) и Personal Access Token. Все колоды и карточки хранятся
             в этом репозитории — обе стороны (телефон и сайт) подключаются к одному репо и
             синхронизируются.
@@ -143,7 +160,7 @@ export default function SettingsPage() {
                 spellCheck={false}
                 autoComplete="new-password"
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-1 text-xs text-text-faint">
                 GitHub: Settings → Developer settings → Personal access tokens (Fine-grained) →
                 доступ на запись (contents: read/write) к одному репозиторию.
               </p>
@@ -157,45 +174,43 @@ export default function SettingsPage() {
             <button
               onClick={handleClone}
               disabled={busy || !cfg.remoteUrl}
-              className="pill-button bg-purple-500/20 hover:bg-purple-500/30"
+              className="pill-button bg-purple-500/20 text-purple-600 hover:bg-purple-500/30"
             >
               <Download size={16} /> Клонировать
             </button>
             <button
               onClick={handleSync}
               disabled={busy || !cfg.remoteUrl}
-              className="pill-button bg-emerald-500/20 hover:bg-emerald-500/30"
+              className="pill-button bg-emerald-500/20 text-emerald-600 hover:bg-emerald-500/30"
             >
               <RefreshCcw size={16} className={busy ? "animate-spin" : ""} />
               Sync (pull + push)
             </button>
           </div>
 
-          <div className="space-y-1 pt-3 text-xs text-neutral-400">
+          <div className="space-y-1 pt-3 text-xs text-text-muted">
             <div>Локальный репозиторий: {hasRepo ? "инициализирован" : "не инициализирован"}</div>
             <div>Несинхронизированных файлов: {pending}</div>
             <div>Последняя синхронизация: {lastSync ?? "—"}</div>
           </div>
         </section>
 
-        <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-white/5">
-          <div className="text-lg font-semibold">Опасная зона</div>
+        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="text-lg font-semibold text-text-primary">Опасная зона</div>
           <button
             onClick={handleWipeRepo}
-            className="pill-button bg-red-500/20 text-red-200 hover:bg-red-500/30"
+            className="pill-button bg-red-500/15 text-red-500 hover:bg-red-500/30"
           >
             <Trash2 size={16} /> Удалить локальные данные
           </button>
         </section>
 
-        <section className="mt-6 space-y-2 rounded-2xl bg-bg-card p-4 ring-1 ring-white/5">
-          <div className="flex items-center gap-2 text-lg font-semibold">
+        <section className="space-y-2 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="flex items-center gap-2 text-lg font-semibold text-text-primary">
             <Upload size={18} /> Как использовать
           </div>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-neutral-300">
-            <li>
-              Создай пустой репозиторий на GitHub (например <code>flashcards</code>).
-            </li>
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-text-secondary">
+            <li>Создай пустой репозиторий на GitHub (например <code>flashcards</code>).</li>
             <li>
               GitHub → Settings → Developer settings → Personal access tokens (Fine-grained) → создай
               токен с правом «Contents: Read and write» на этот репо.
@@ -213,7 +228,7 @@ export default function SettingsPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1 text-sm font-medium text-neutral-300">{label}</div>
+      <div className="mb-1 text-sm font-medium text-text-secondary">{label}</div>
       {children}
     </label>
   );

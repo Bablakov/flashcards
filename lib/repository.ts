@@ -10,6 +10,7 @@ import {
   DeckSettingsSchema,
   DeckSummary,
 } from "./types";
+import { deckProgress } from "./srs";
 import {
   DECKS_DIR,
   ensureDir,
@@ -79,22 +80,38 @@ export async function listDeckSummaries(): Promise<DeckSummary[]> {
     const deck = await getDeck(id);
     if (!deck) continue;
     const cards = await getCards(id);
-    const learned = cards.filter((c) => c.level >= 5).length;
-    const progress = cards.length === 0 ? 0 : Math.round((learned / cards.length) * 100);
-    out.push({ ...deck, cardCount: cards.length, progress });
+    const { learned, percent } = deckProgress(cards);
+    out.push({ ...deck, cardCount: cards.length, progress: percent, learnedCount: learned });
   }
-  out.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return out;
 }
 
-export async function createDeck(name: string, color = "#e36b6b"): Promise<Deck> {
+export interface CreateDeckInput {
+  name: string;
+  color?: string;
+  image?: string | null;
+  description?: string;
+  frontLanguage?: string;
+  backLanguage?: string;
+}
+
+export async function createDeck(input: CreateDeckInput | string, color = "#e36b6b"): Promise<Deck> {
+  const params: CreateDeckInput =
+    typeof input === "string" ? { name: input, color } : input;
   const id = nanoid(10);
   const now = nowIso();
+  const settings = DeckSettingsSchema.parse({
+    frontLanguage: params.frontLanguage ?? "ru",
+    backLanguage: params.backLanguage ?? "en",
+  });
   const deck: Deck = {
     id,
-    name: name.trim() || "Без названия",
-    color,
-    settings: DeckSettingsSchema.parse({}),
+    name: params.name.trim() || "Без названия",
+    color: params.color ?? color,
+    image: params.image ?? null,
+    description: params.description ?? "",
+    settings,
     cardCount: 0,
     createdAt: now,
     updatedAt: now,
@@ -106,32 +123,40 @@ export async function createDeck(name: string, color = "#e36b6b"): Promise<Deck>
   return deck;
 }
 
-export async function renameDeck(deckId: string, name: string): Promise<Deck | null> {
+export async function updateDeck(
+  deckId: string,
+  patch: Partial<Omit<Deck, "id" | "createdAt">>,
+): Promise<Deck | null> {
   const deck = await getDeck(deckId);
   if (!deck) return null;
-  const updated = { ...deck, name: name.trim() || deck.name, updatedAt: nowIso() };
+  const settings = patch.settings
+    ? DeckSettingsSchema.parse({ ...deck.settings, ...patch.settings })
+    : deck.settings;
+  const updated: Deck = {
+    ...deck,
+    ...patch,
+    settings,
+    id: deck.id,
+    createdAt: deck.createdAt,
+    updatedAt: nowIso(),
+  };
   await writeDeckMeta(updated);
   return updated;
 }
 
+export async function renameDeck(deckId: string, name: string): Promise<Deck | null> {
+  return updateDeck(deckId, { name: name.trim() || undefined });
+}
+
 export async function setDeckColor(deckId: string, color: string): Promise<Deck | null> {
-  const deck = await getDeck(deckId);
-  if (!deck) return null;
-  const updated = { ...deck, color, updatedAt: nowIso() };
-  await writeDeckMeta(updated);
-  return updated;
+  return updateDeck(deckId, { color });
 }
 
 export async function setDeckSettings(
   deckId: string,
   settings: Partial<DeckSettings>,
 ): Promise<Deck | null> {
-  const deck = await getDeck(deckId);
-  if (!deck) return null;
-  const merged = DeckSettingsSchema.parse({ ...deck.settings, ...settings });
-  const updated = { ...deck, settings: merged, updatedAt: nowIso() };
-  await writeDeckMeta(updated);
-  return updated;
+  return updateDeck(deckId, { settings: settings as DeckSettings });
 }
 
 export async function deleteDeck(deckId: string): Promise<void> {
@@ -152,7 +177,11 @@ export async function addCard(
     id,
     front: { text: "", image: null, audio: null, ...front },
     back: { text: "", image: null, audio: null, ...back },
-    level: 0,
+    box: 1,
+    goodCount: 0,
+    badCount: 0,
+    reviewCount: 0,
+    lastReviewedAt: null,
     tags: [],
     createdAt: now,
     updatedAt: now,
@@ -205,7 +234,7 @@ export async function deleteCard(deckId: string, cardId: string): Promise<void> 
 export async function saveMedia(
   deckId: string,
   cardId: string,
-  side: "front" | "back",
+  side: "front" | "back" | "deck",
   kind: "image" | "audio",
   bytes: Uint8Array,
   ext: string,

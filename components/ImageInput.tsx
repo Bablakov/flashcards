@@ -43,7 +43,7 @@ export function ImageInput({ deckId, imagePath, onPicked, onCleared, label }: Pr
 
   return (
     <div className="space-y-2">
-      <div className="text-sm font-medium text-neutral-300">{label}</div>
+      <div className="text-sm font-medium text-text-secondary">{label}</div>
       {preview ? (
         <div className="relative overflow-hidden rounded-xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -62,14 +62,14 @@ export function ImageInput({ deckId, imagePath, onPicked, onCleared, label }: Pr
           <button
             type="button"
             onClick={() => pick(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500/80 px-4 py-3 text-sm font-medium text-white"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500/80 px-4 py-3 text-sm font-medium text-white transition hover:bg-indigo-500"
           >
             <Camera size={16} /> Камера
           </button>
           <button
             type="button"
             onClick={() => pick(false)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500/80 px-4 py-3 text-sm font-medium text-white"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500/80 px-4 py-3 text-sm font-medium text-white transition hover:bg-amber-500"
           >
             <Folder size={16} /> Файл
           </button>

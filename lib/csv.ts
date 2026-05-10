@@ -17,11 +17,29 @@ export async function parseCsv(text: string): Promise<CsvRow[]> {
       skipEmptyLines: true,
       complete: (res) => {
         const rows: CsvRow[] = (res.data ?? []).map((r) => {
-          const front = r["Front side"] ?? r["front"] ?? r["Front"] ?? "";
-          const back = r["Back side"] ?? r["back"] ?? r["Back"] ?? "";
-          return { front, back, level: r["level"], tags: r["tags"] };
+          const front =
+            r["Лицевая сторона"] ??
+            r["Front side"] ??
+            r["front"] ??
+            r["Front"] ??
+            r["Лицевая"] ??
+            "";
+          const back =
+            r["Обратная сторона"] ??
+            r["Back side"] ??
+            r["back"] ??
+            r["Back"] ??
+            r["Обратная"] ??
+            "";
+          return { front, back, level: r["level"], tags: r["tags"] ?? r["Теги"] };
         });
-        resolve(rows.filter((r) => (r.front || r.back) && r.front !== "Этот столбец будет добавлен как текст лицевой стороны."));
+        resolve(
+          rows.filter(
+            (r) =>
+              (r.front || r.back) &&
+              r.front !== "Этот столбец будет добавлен как текст лицевой стороны.",
+          ),
+        );
       },
       error: (err: Error) => reject(err),
     });
@@ -30,10 +48,12 @@ export async function parseCsv(text: string): Promise<CsvRow[]> {
 
 export function cardsToCsv(cards: Card[]): string {
   const data = cards.map((c) => ({
-    "Front side": c.front.text,
-    "Back side": c.back.text,
-    level: c.level,
-    tags: c.tags.join("|"),
+    "Лицевая сторона": c.front.text,
+    "Обратная сторона": c.back.text,
   }));
-  return Papa.unparse(data);
+  return Papa.unparse(data, {
+    quotes: true,
+    header: true,
+    newline: "\r\n",
+  });
 }

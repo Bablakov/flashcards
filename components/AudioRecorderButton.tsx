@@ -53,7 +53,7 @@ export function AudioRecorderButton({ onRecorded }: Props) {
       onClick={recording ? stop : start}
       type="button"
       className={`flex w-full items-center justify-center gap-3 rounded-2xl px-6 py-4 text-base font-medium transition ${
-        recording ? "bg-red-500 text-white" : "bg-accent text-white hover:bg-accent/90"
+        recording ? "bg-red-500 text-white" : "bg-[var(--accent)] text-white hover:opacity-90"
       }`}
     >
       {recording ? <Square size={20} /> : <Mic size={20} />}

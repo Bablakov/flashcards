@@ -2,15 +2,30 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Plus, Play, FileSpreadsheet, Download, Search, Sliders, Sparkles } from "lucide-react";
+import {
+  Plus,
+  Play,
+  FileSpreadsheet,
+  Download,
+  Search,
+  Sliders,
+  Sparkles,
+  Pencil,
+} from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { CardPreview } from "@/components/CardPreview";
-import { Card, Deck } from "@/lib/types";
-import { addCard, deleteCard, getCards, getDeck } from "@/lib/repository";
+import { Card, Deck, languageInfo } from "@/lib/types";
+import {
+  addCard,
+  deleteCard,
+  getCards,
+  getDeck,
+  updateDeck,
+} from "@/lib/repository";
 import { toast } from "@/components/Toaster";
 import { parseCsv, cardsToCsv } from "@/lib/csv";
+import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
 
 type SortMode =
   | "custom"
@@ -19,8 +34,8 @@ type SortMode =
   | "createdDesc"
   | "alphaAsc"
   | "alphaDesc"
-  | "levelAsc"
-  | "levelDesc";
+  | "boxAsc"
+  | "boxDesc";
 
 export default function DeckPageWrapper() {
   return (
@@ -38,8 +53,9 @@ function DeckPage() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
-  const [sort, setSort] = useState<SortMode>("custom");
+  const [sort, setSort] = useState<SortMode>("createdDesc");
   const [showSort, setShowSort] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   async function refresh() {
     if (!deckId) return;
@@ -81,11 +97,11 @@ function DeckPage() {
       case "alphaDesc":
         list.sort((a, b) => b.front.text.localeCompare(a.front.text, "ru"));
         break;
-      case "levelAsc":
-        list.sort((a, b) => a.level - b.level);
+      case "boxAsc":
+        list.sort((a, b) => a.box - b.box);
         break;
-      case "levelDesc":
-        list.sort((a, b) => b.level - a.level);
+      case "boxDesc":
+        list.sort((a, b) => b.box - a.box);
         break;
     }
     return list;
@@ -135,14 +151,41 @@ function DeckPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleSaveDeck(val: {
+    name: string;
+    color: string;
+    image: string | null;
+    description: string;
+    frontLanguage: string;
+    backLanguage: string;
+  }) {
+    const persistedImage = await persistPendingDeckImage(deckId, val.image);
+    await updateDeck(deckId, {
+      name: val.name,
+      color: val.color,
+      image: persistedImage,
+      description: val.description,
+      settings: {
+        frontLanguage: val.frontLanguage,
+        backLanguage: val.backLanguage,
+      } as never,
+    });
+    toast("Сохранено", "success");
+    setEditorOpen(false);
+    await refresh();
+  }
+
   if (!deckId) {
     return (
       <>
         <TopBar back title="Колода" />
-        <div className="px-4 py-12 text-center text-neutral-400">Колода не выбрана</div>
+        <div className="px-4 py-12 text-center text-text-muted">Колода не выбрана</div>
       </>
     );
   }
+
+  const front = deck ? languageInfo(deck.settings.frontLanguage) : null;
+  const back = deck ? languageInfo(deck.settings.backLanguage) : null;
 
   return (
     <>
@@ -150,47 +193,72 @@ function DeckPage() {
         title={deck?.name ?? ""}
         back
         rightSlot={
-          <button
-            className="icon-btn"
-            onClick={() => setShowSort((v) => !v)}
-            aria-label="Сортировка"
-          >
-            <Sliders size={20} />
-          </button>
+          <>
+            <button className="icon-btn" onClick={() => setEditorOpen(true)} aria-label="Редактировать колоду">
+              <Pencil size={18} />
+            </button>
+            <button
+              className="icon-btn"
+              onClick={() => setShowSort((v) => !v)}
+              aria-label="Сортировка"
+            >
+              <Sliders size={20} />
+            </button>
+          </>
         }
       />
 
       <main className="flex-1 px-4 pb-28 pt-2">
+        {deck && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-text-muted">
+            {front && (
+              <span className="lang-chip">
+                {front.flag} {front.code.toUpperCase()}
+              </span>
+            )}
+            <span className="text-text-faint">→</span>
+            {back && (
+              <span className="lang-chip">
+                {back.flag} {back.code.toUpperCase()}
+              </span>
+            )}
+            <span className="ml-2">{deck.cardCount} карт.</span>
+            {deck.description && (
+              <span className="ml-auto truncate text-text-faint">{deck.description}</span>
+            )}
+          </div>
+        )}
+
         <div className="mb-3 flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-white/5">
-            <Search size={16} className="text-neutral-500" />
+          <div className="flex flex-1 items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-[var(--ring-base)]">
+            <Search size={16} className="text-text-faint" />
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Поиск..."
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-500"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-faint"
             />
           </div>
         </div>
 
         {showSort && (
-          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl bg-bg-card p-3 ring-1 ring-white/5">
+          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl bg-bg-card p-3 ring-1 ring-[var(--ring-base)]">
             {(
               [
-                ["custom", "Пользовательский"],
+                ["custom", "По умолчанию"],
                 ["shuffle", "Перемешать"],
                 ["createdAsc", "Создано ↑"],
                 ["createdDesc", "Создано ↓"],
                 ["alphaAsc", "А-Я"],
                 ["alphaDesc", "Я-А"],
-                ["levelAsc", "Уровень ↑"],
-                ["levelDesc", "Уровень ↓"],
+                ["boxAsc", "Слабые → сильные"],
+                ["boxDesc", "Сильные → слабые"],
               ] as [SortMode, string][]
             ).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setSort(k)}
-                className={`rounded-lg px-3 py-2 text-left text-sm ${sort === k ? "bg-accent/20 text-accent" : "text-neutral-300 hover:bg-white/5"}`}
+                className={`rounded-lg px-3 py-2 text-left text-sm transition ${sort === k ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "text-text-secondary hover:bg-[var(--ring-base)]"}`}
               >
                 {label}
               </button>
@@ -198,44 +266,24 @@ function DeckPage() {
           </div>
         )}
 
-        {loading && <div className="py-12 text-center text-neutral-400">Загрузка...</div>}
+        {loading && <div className="py-12 text-center text-text-muted">Загрузка...</div>}
 
         {!loading && visible.length === 0 && (
-          <div className="py-12 text-center text-neutral-400">
-            Карточек нет. Нажми «Добавить карточку» или импортируй CSV.
+          <div className="py-12 text-center text-text-muted">
+            Карточек нет. Нажми «Добавить» или импортируй CSV.
           </div>
         )}
 
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {visible.map((card) => (
-            <div key={card.id} className="space-y-2">
-              <CardPreview
-                deckId={deckId}
-                card={card}
-                side="front"
-                onClick={() => router.push(`/card?deck=${deckId}&id=${card.id}`)}
-              />
-              <CardPreview
-                deckId={deckId}
-                card={card}
-                side="back"
-                onClick={() => router.push(`/card?deck=${deckId}&id=${card.id}`)}
-              />
-              <div className="flex items-center justify-end gap-2 px-1">
-                <Link
-                  href={`/card?deck=${deckId}&id=${card.id}`}
-                  className="text-xs text-neutral-400 hover:text-neutral-200"
-                >
-                  редактировать
-                </Link>
-                <button
-                  onClick={() => handleDelete(card.id)}
-                  className="text-xs text-red-400 hover:text-red-300"
-                >
-                  удалить
-                </button>
-              </div>
-            </div>
+            <CardPreview
+              key={card.id}
+              deckId={deckId}
+              card={card}
+              onClick={() => router.push(`/card?deck=${deckId}&id=${card.id}`)}
+              onEdit={() => router.push(`/card?deck=${deckId}&id=${card.id}`)}
+              onDelete={() => handleDelete(card.id)}
+            />
           ))}
         </div>
       </main>
@@ -261,6 +309,24 @@ function DeckPage() {
           onClick={() => router.push(`/options?deck=${deckId}`)}
         />
       </BottomActions>
+
+      {deck && (
+        <DeckEditorModal
+          open={editorOpen}
+          title="Редактировать колоду"
+          deckId={deckId}
+          initial={{
+            name: deck.name,
+            color: deck.color,
+            image: deck.image,
+            description: deck.description,
+            frontLanguage: deck.settings.frontLanguage,
+            backLanguage: deck.settings.backLanguage,
+          }}
+          onSave={handleSaveDeck}
+          onClose={() => setEditorOpen(false)}
+        />
+      )}
     </>
   );
 }

@@ -1,40 +1,52 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Plus, Pencil, Trash2, RefreshCcw, Palette, MoreHorizontal } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, RefreshCcw, Search } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { DeckSummary } from "@/lib/types";
 import {
+  addCard,
   createDeck,
   deleteDeck,
+  getDeck,
   listDeckSummaries,
-  renameDeck,
-  setDeckColor,
+  updateDeck,
 } from "@/lib/repository";
 import { toast } from "@/components/Toaster";
 import { syncAll, pendingChangesCount } from "@/lib/git";
-import { loadGitConfig, loadSyncStatus } from "@/lib/settings";
+import { loadGitConfig } from "@/lib/settings";
 import { maybeInstallSeed } from "@/lib/seed";
-
-const PALETTE = [
-  "#e36b6b",
-  "#f59e0b",
-  "#22c55e",
-  "#06b6d4",
-  "#7c3aed",
-  "#ec4899",
-];
+import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
+import { DeckCard } from "@/components/DeckCard";
 
 export default function HomePage() {
+  const router = useRouter();
   const [decks, setDecks] = useState<DeckSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
+  const [filter, setFilter] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingInitial, setEditingInitial] = useState<{
+    name: string;
+    color: string;
+    image: string | null;
+    description: string;
+    frontLanguage: string;
+    backLanguage: string;
+  } | null>(null);
 
   const totalCards = useMemo(() => decks.reduce((s, d) => s + d.cardCount, 0), [decks]);
+  const visibleDecks = useMemo(() => {
+    if (!filter.trim()) return decks;
+    const q = filter.toLowerCase();
+    return decks.filter(
+      (d) => d.name.toLowerCase().includes(q) || d.description.toLowerCase().includes(q),
+    );
+  }, [decks, filter]);
 
   async function refresh() {
     setLoading(true);
@@ -63,38 +75,38 @@ export default function HomePage() {
     })();
   }, []);
 
-  async function handleAddDeck() {
-    const name = window.prompt("Название колоды");
-    if (!name) return;
-    const color = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-    await createDeck(name, color);
-    await refresh();
+  function openCreate() {
+    setEditingId(null);
+    setEditingInitial(null);
+    setEditorOpen(true);
   }
 
-  async function handleRename(id: string) {
-    const current = decks.find((d) => d.id === id);
-    const name = window.prompt("Новое название", current?.name ?? "");
-    if (!name) return;
-    await renameDeck(id, name);
-    setMenuFor(null);
-    await refresh();
+  async function openEdit(id: string) {
+    const d = await getDeck(id);
+    if (!d) return;
+    setEditingId(id);
+    setEditingInitial({
+      name: d.name,
+      color: d.color,
+      image: d.image,
+      description: d.description,
+      frontLanguage: d.settings.frontLanguage,
+      backLanguage: d.settings.backLanguage,
+    });
+    setEditorOpen(true);
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm("Удалить колоду со всеми карточками?")) return;
+    const d = decks.find((x) => x.id === id);
+    if (!window.confirm(`Удалить колоду «${d?.name ?? ""}» со всеми карточками?`)) return;
     await deleteDeck(id);
-    setMenuFor(null);
     toast("Колода удалена", "success");
     await refresh();
   }
 
-  async function handleColor(id: string) {
-    const cur = decks.find((d) => d.id === id);
-    const idx = PALETTE.indexOf(cur?.color ?? "");
-    const next = PALETTE[(idx + 1) % PALETTE.length];
-    await setDeckColor(id, next);
-    setMenuFor(null);
-    await refresh();
+  async function handleAddCard(deckId: string) {
+    const card = await addCard(deckId, { text: "" }, { text: "" });
+    router.push(`/card?deck=${deckId}&id=${card.id}`);
   }
 
   async function handleSync() {
@@ -116,83 +128,105 @@ export default function HomePage() {
     }
   }
 
+  async function handleSaveDeck(val: {
+    name: string;
+    color: string;
+    image: string | null;
+    description: string;
+    frontLanguage: string;
+    backLanguage: string;
+  }) {
+    if (editingId) {
+      await updateDeck(editingId, {
+        name: val.name,
+        color: val.color,
+        image: val.image,
+        description: val.description,
+        settings: {
+          frontLanguage: val.frontLanguage,
+          backLanguage: val.backLanguage,
+        } as never,
+      });
+      toast("Колода обновлена", "success");
+    } else {
+      const created = await createDeck({
+        name: val.name,
+        color: val.color,
+        image: null,
+        description: val.description,
+        frontLanguage: val.frontLanguage,
+        backLanguage: val.backLanguage,
+      });
+      const persistedImage = await persistPendingDeckImage(created.id, val.image);
+      if (persistedImage) {
+        await updateDeck(created.id, { image: persistedImage });
+      }
+      toast("Колода создана", "success");
+    }
+    setEditorOpen(false);
+    await refresh();
+  }
+
   return (
     <>
       <TopBar />
       <main className="flex-1 px-4 pb-24 pt-2">
+        <div className="mb-3 flex items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-[var(--ring-base)]">
+          <Search size={16} className="text-text-faint" />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Поиск колоды..."
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-faint"
+          />
+        </div>
+
+        {decks.length > 0 && (
+          <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+            <Stat label="Колод" value={decks.length} />
+            <Stat label="Карточек" value={totalCards} />
+            <Stat
+              label="Выучено"
+              value={`${Math.round(
+                decks.reduce((s, d) => s + d.learnedCount, 0) /
+                  Math.max(1, totalCards) *
+                  100,
+              )}%`}
+            />
+          </div>
+        )}
+
         {pending > 0 && (
-          <div className="mb-3 rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
+          <div className="mb-3 rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-600">
             Не синхронизировано: {pending} файлов
           </div>
         )}
-        <div className="space-y-3">
-          {loading && <div className="py-12 text-center text-neutral-400">Загрузка...</div>}
-          {!loading && decks.length === 0 && (
-            <div className="py-12 text-center text-neutral-400">
-              Колод пока нет. Нажми «Добавить колоду».
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {loading && (
+            <div className="col-span-full py-12 text-center text-text-muted">Загрузка...</div>
+          )}
+          {!loading && visibleDecks.length === 0 && (
+            <div className="col-span-full py-12 text-center text-text-muted">
+              {filter
+                ? "Ничего не найдено"
+                : "Колод пока нет. Нажми «Добавить колоду»."}
             </div>
           )}
-          {decks.map((deck) => (
-            <div key={deck.id} className="relative">
-              <Link
-                href={`/deck?id=${deck.id}`}
-                className="deck-tile block"
-                style={{ borderLeft: `4px solid ${deck.color}` }}
-              >
-                <span
-                  className="absolute left-3 top-3 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
-                  style={{ backgroundColor: deck.color }}
-                >
-                  {deck.progress}%
-                </span>
-                <span
-                  className="absolute right-3 top-3 text-xs text-neutral-400"
-                  aria-label="карточек"
-                >
-                  {deck.cardCount} карт.
-                </span>
-                <div className="text-center text-2xl font-semibold text-neutral-100">
-                  {deck.name}
-                </div>
-              </Link>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  setMenuFor(menuFor === deck.id ? null : deck.id);
-                }}
-                className="absolute bottom-2 right-2 icon-btn"
-                aria-label="Меню"
-              >
-                <MoreHorizontal size={20} />
-              </button>
-              {menuFor === deck.id && (
-                <div className="absolute bottom-12 right-2 z-20 w-56 overflow-hidden rounded-xl bg-bg-card shadow-lg ring-1 ring-white/10">
-                  <button
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-white/5"
-                    onClick={() => handleRename(deck.id)}
-                  >
-                    <Pencil size={16} /> Переименовать
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-white/5"
-                    onClick={() => handleColor(deck.id)}
-                  >
-                    <Palette size={16} /> Сменить цвет
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-red-300 hover:bg-red-500/10"
-                    onClick={() => handleDelete(deck.id)}
-                  >
-                    <Trash2 size={16} /> Удалить
-                  </button>
-                </div>
-              )}
-            </div>
+          {visibleDecks.map((deck) => (
+            <DeckCard
+              key={deck.id}
+              deck={deck}
+              onAddCard={handleAddCard}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+            />
           ))}
         </div>
       </main>
+
       <BottomActions>
-        <ActionButton icon={<Plus size={22} />} label="Добавить колоду" onClick={handleAddDeck} />
+        <ActionButton icon={<Plus size={22} />} label="Колода" onClick={openCreate} />
         <ActionButton
           icon={<RefreshCcw size={22} className={busy ? "animate-spin" : ""} />}
           label={busy ? "Sync..." : "Синхронизация"}
@@ -200,6 +234,24 @@ export default function HomePage() {
           disabled={busy}
         />
       </BottomActions>
+
+      <DeckEditorModal
+        open={editorOpen}
+        title={editingId ? "Редактировать колоду" : "Новая колода"}
+        deckId={editingId ?? undefined}
+        initial={editingInitial ?? undefined}
+        onSave={handleSaveDeck}
+        onClose={() => setEditorOpen(false)}
+      />
     </>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-xl bg-bg-card px-3 py-2 ring-1 ring-[var(--ring-base)]">
+      <div className="text-lg font-semibold text-text-primary">{value}</div>
+      <div className="text-[11px] text-text-muted">{label}</div>
+    </div>
   );
 }

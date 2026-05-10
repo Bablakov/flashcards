@@ -23,7 +23,7 @@ export function Toaster() {
       setItems((prev) => [...prev, t]);
       window.setTimeout(() => {
         setItems((prev) => prev.filter((x) => x.id !== t.id));
-      }, 4000);
+      }, 3500);
     };
     listeners.add(onPush);
     return () => {
@@ -32,16 +32,16 @@ export function Toaster() {
   }, []);
 
   return (
-    <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-4">
+    <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-4 sm:bottom-6">
       {items.map((it) => (
         <div
           key={it.id}
-          className={`pointer-events-auto w-full rounded-xl px-4 py-3 text-sm shadow-lg ring-1 ring-white/10 ${
+          className={`pointer-events-auto w-full rounded-xl px-4 py-3 text-sm shadow-lg ${
             it.kind === "error"
-              ? "bg-red-500/15 text-red-200"
+              ? "bg-red-500/15 text-red-500 ring-1 ring-red-500/40"
               : it.kind === "success"
-                ? "bg-emerald-500/15 text-emerald-200"
-                : "bg-neutral-800 text-neutral-100"
+                ? "bg-emerald-500/15 text-emerald-600 ring-1 ring-emerald-500/40"
+                : "bg-bg-card text-text-primary ring-1 ring-[var(--ring-strong)]"
           }`}
         >
           {it.text}

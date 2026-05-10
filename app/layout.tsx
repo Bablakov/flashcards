@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/Toaster";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Flashcards",
@@ -15,12 +16,31 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
+const themeBootstrap = `
+(function(){
+  try {
+    var stored = localStorage.getItem('flashcards.theme');
+    var t = stored === 'light' || stored === 'dark'
+      ? stored
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    var c = document.documentElement.classList;
+    c.remove('theme-light','dark');
+    c.add(t === 'light' ? 'theme-light' : 'dark');
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
-      <body className="min-h-screen bg-bg text-neutral-100">
-        <div className="mx-auto flex min-h-screen max-w-3xl flex-col">{children}</div>
-        <Toaster />
+    <html lang="ru" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
+      <body className="min-h-screen bg-bg-base text-text-primary">
+        <ThemeProvider>
+          <div className="mx-auto flex min-h-screen max-w-3xl flex-col">{children}</div>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

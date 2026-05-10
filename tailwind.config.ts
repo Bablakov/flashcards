@@ -7,22 +7,19 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#1a1a1a",
-          soft: "#262626",
-          card: "#2d2d2d",
+          DEFAULT: "var(--bg-base)",
+          base: "var(--bg-base)",
+          soft: "var(--bg-soft)",
+          card: "var(--bg-card)",
+        },
+        text: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
+          faint: "var(--text-faint)",
         },
         accent: {
-          DEFAULT: "#e36b6b",
-          purple: "#7c3aed",
-          orange: "#f59e0b",
-        },
-        level: {
-          1: "#ef4444",
-          2: "#f97316",
-          3: "#eab308",
-          4: "#22c55e",
-          5: "#06b6d4",
-          6: "#6366f1",
+          DEFAULT: "var(--accent)",
         },
       },
       fontFamily: {
