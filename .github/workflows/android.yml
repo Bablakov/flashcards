@@ -1,0 +1,58 @@
+name: Android APK
+
+  on:
+    push:
+      branches: [main]
+    pull_request:
+      branches: [main]
+    workflow_dispatch:
+
+  jobs:
+    build-apk:
+      runs-on: ubuntu-latest
+      timeout-minutes: 30
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+        - name: Setup Node 20
+          uses: actions/setup-node@v4
+          with:
+            node-version: "20"
+            cache: "npm"
+        - name: Setup JDK 17
+          uses: actions/setup-java@v4
+          with:
+            distribution: temurin
+            java-version: "17"
+        - name: Setup Android SDK
+          uses: android-actions/setup-android@v3
+        - name: Install dependencies
+          run: npm ci
+        - name: Seed data (optional)
+          run: npm run seed
+          continue-on-error: true
+        - name: Build Next.js static export
+          run: npm run build
+        - name: Add Android platform (if missing)
+          run: |
+            if [ ! -d "android" ]; then
+              npx cap add android
+            fi
+        - name: Sync Capacitor
+          run: npx cap sync android
+        - name: Make gradlew executable
+          run: chmod +x android/gradlew
+        - name: Build debug APK
+          working-directory: android
+          run: ./gradlew assembleDebug --no-daemon
+        - name: Rename APK
+          run: |
+            mkdir -p artifacts
+            cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/flashcards-${{ github.run_number }}.apk
+        - name: Upload APK artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: flashcards-apk
+            path: artifacts/*.apk
+            retention-days: 30
+          
