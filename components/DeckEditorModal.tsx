@@ -173,9 +173,9 @@ export function DeckEditorModal({ open, title, initial, deckId, onSave, onClose 
           <div>
             <div className="mb-2 text-sm font-medium text-text-secondary">Обложка</div>
             {imagePreview ? (
-              <div className="relative overflow-hidden rounded-xl">
+              <div className="relative overflow-hidden rounded-xl bg-bg-soft ring-1 ring-[var(--ring-base)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="" className="h-40 w-full object-cover" />
+                <img src={imagePreview} alt="" className="h-40 w-full object-contain" />
                 <button
                   type="button"
                   onClick={clearImage}

@@ -26,6 +26,13 @@ import {
 import { toast } from "@/components/Toaster";
 import { parseCsv, cardsToCsv } from "@/lib/csv";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
+import {
+  FCDECK_FORMAT,
+  importPackedDeck,
+  isPackedDeck,
+  packDeck,
+  safeFileName,
+} from "@/lib/pack";
 
 type SortMode =
   | "custom"
@@ -56,6 +63,8 @@ function DeckPage() {
   const [sort, setSort] = useState<SortMode>("createdDesc");
   const [showSort, setShowSort] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   async function refresh() {
     if (!deckId) return;
@@ -118,15 +127,30 @@ function DeckPage() {
     await refresh();
   }
 
-  async function handleImportCsv() {
+  async function handleImport() {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".csv,text/csv";
+    input.accept = ".csv,.fcdeck,.json,text/csv,application/json";
     input.onchange = async () => {
       const f = input.files?.[0];
       if (!f) return;
       const text = await f.text();
+      const looksJson = /^\s*[{\[]/.test(text);
       try {
+        if (looksJson) {
+          const parsed = JSON.parse(text);
+          if (!isPackedDeck(parsed)) {
+            toast("Не похоже на колоду (.fcdeck)", "error");
+            return;
+          }
+          const res = await importPackedDeck(parsed);
+          toast(
+            `Колода импортирована: ${res.cardCount} карт, ${res.mediaCount} медиа`,
+            "success",
+          );
+          router.push(`/deck?id=${res.deckId}`);
+          return;
+        }
         const rows = await parseCsv(text);
         for (const r of rows) {
           await addCard(deckId, { text: r.front }, { text: r.back });
@@ -134,21 +158,50 @@ function DeckPage() {
         toast(`Импортировано: ${rows.length}`, "success");
         await refresh();
       } catch (e: unknown) {
-        toast(`CSV ошибка: ${(e as Error).message}`, "error");
+        toast(`Ошибка импорта: ${(e as Error).message}`, "error");
       }
     };
     input.click();
   }
 
-  function handleExportCsv() {
-    const csv = cardsToCsv(cards);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${deck?.name || "deck"}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function handleExportCsv() {
+    const csv = cardsToCsv(cards);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, `${safeFileName(deck?.name || "deck")}.csv`);
+    setExportOpen(false);
+  }
+
+  async function handleExportPack(withMedia: boolean) {
+    if (!deck) return;
+    setExporting(true);
+    try {
+      const pack = await packDeck(deckId, withMedia);
+      const json = JSON.stringify(pack);
+      const blob = new Blob([json], { type: "application/json" });
+      const suffix = withMedia ? "with-media" : "text-only";
+      downloadBlob(blob, `${safeFileName(deck.name)}-${suffix}.fcdeck`);
+      const mediaTotal = Object.keys(pack.media).length;
+      toast(
+        withMedia
+          ? `Колода экспортирована: ${pack.cards.length} карт + ${mediaTotal} медиа`
+          : `Колода экспортирована: ${pack.cards.length} карт`,
+        "success",
+      );
+    } catch (e: unknown) {
+      toast(`Ошибка экспорта: ${(e as Error).message}`, "error");
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   }
 
   async function handleSaveDeck(val: {
@@ -296,11 +349,11 @@ function DeckPage() {
           disabled={cards.length === 0}
         />
         <ActionButton icon={<Plus size={22} />} label="Добавить" onClick={handleAdd} />
-        <ActionButton icon={<FileSpreadsheet size={22} />} label="Импорт" onClick={handleImportCsv} />
+        <ActionButton icon={<FileSpreadsheet size={22} />} label="Импорт" onClick={handleImport} />
         <ActionButton
           icon={<Download size={22} />}
           label="Экспорт"
-          onClick={handleExportCsv}
+          onClick={() => setExportOpen(true)}
           disabled={cards.length === 0}
         />
         <ActionButton
@@ -326,6 +379,61 @@ function DeckPage() {
           onSave={handleSaveDeck}
           onClose={() => setEditorOpen(false)}
         />
+      )}
+
+      {exportOpen && (
+        <div className="modal-backdrop" onClick={() => !exporting && setExportOpen(false)}>
+          <div className="modal-panel max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-[var(--ring-base)] px-5 py-3 text-base font-semibold">
+              Экспорт колоды
+            </div>
+            <div className="space-y-3 p-5">
+              <button
+                onClick={handleExportCsv}
+                disabled={exporting}
+                className="w-full rounded-xl bg-bg-soft p-4 text-left ring-1 ring-[var(--ring-base)] hover:bg-[var(--ring-base)] disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-text-primary">CSV (только текст)</div>
+                <div className="mt-1 text-xs text-text-muted">
+                  Excel-совместимый. Картинки и аудио не сохраняются.
+                </div>
+              </button>
+              <button
+                onClick={() => handleExportPack(false)}
+                disabled={exporting}
+                className="w-full rounded-xl bg-bg-soft p-4 text-left ring-1 ring-[var(--ring-base)] hover:bg-[var(--ring-base)] disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-text-primary">
+                  {FCDECK_FORMAT} — только текст (.fcdeck)
+                </div>
+                <div className="mt-1 text-xs text-text-muted">
+                  Полные данные карточек (теги, прогресс), без медиа.
+                </div>
+              </button>
+              <button
+                onClick={() => handleExportPack(true)}
+                disabled={exporting}
+                className="w-full rounded-xl bg-indigo-500/15 p-4 text-left ring-1 ring-indigo-500/30 hover:bg-indigo-500/25 disabled:opacity-50"
+              >
+                <div className="text-sm font-semibold text-indigo-600">
+                  Полный пакет с картинками (.fcdeck)
+                </div>
+                <div className="mt-1 text-xs text-text-muted">
+                  Один файл со всеми картинками и аудио. Может быть большим.
+                </div>
+              </button>
+            </div>
+            <div className="flex justify-end border-t border-[var(--ring-base)] px-5 py-3">
+              <button
+                className="pill-button"
+                onClick={() => setExportOpen(false)}
+                disabled={exporting}
+              >
+                {exporting ? "Подождите..." : "Отмена"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

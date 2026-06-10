@@ -1,0 +1,7 @@
+name = "flashcards-cors-proxy"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# После деплоя URL воркера будет вида:
+#   https://flashcards-cors-proxy.<твой-субдомен>.workers.dev
+# Его и нужно вставить в приложении: Настройки → CORS-прокси.

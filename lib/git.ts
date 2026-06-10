@@ -6,6 +6,7 @@ import { Buffer } from "buffer";
 import { getFS, REPO_ROOT, ensureRepoSkeleton, exists } from "./fs";
 import { GitConfig } from "./types";
 import { loadSyncStatus, saveSyncStatus } from "./settings";
+import { flashcardsMergeDriver } from "./merge";
 
 if (typeof window !== "undefined" && !(window as unknown as { Buffer?: unknown }).Buffer) {
   (window as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
@@ -18,6 +19,14 @@ function fsRef() {
 function authFor(cfg: GitConfig): { username: string; password: string } | undefined {
   if (!cfg.token) return undefined;
   return { username: cfg.username || "x-access-token", password: cfg.token };
+}
+
+/**
+ * CORS-прокси (вариант B). Без него запросы isomorphic-git к github.com из браузера/
+ * Android WebView блокируются CORS. Пустая строка → undefined (прямое соединение).
+ */
+function corsProxyFor(cfg: GitConfig): string | undefined {
+  return cfg.corsProxy?.trim() ? cfg.corsProxy.trim() : undefined;
 }
 
 export async function isInitialized(): Promise<boolean> {
@@ -39,6 +48,7 @@ export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void):
     http,
     dir: REPO_ROOT,
     url: cfg.remoteUrl,
+    corsProxy: corsProxyFor(cfg),
     ref: cfg.branch || "main",
     singleBranch: true,
     depth: 1,
@@ -108,20 +118,26 @@ export async function commit(cfg: GitConfig, message: string): Promise<string | 
 
 export async function pull(cfg: GitConfig, onProgress?: (m: string) => void): Promise<void> {
   onProgress?.("Pull...");
-  await git.pull({
+  // mergeDriver поддерживается рантаймом isomorphic-git 1.37+, но отсутствует в типах
+  // pull — поэтому точечный каст. Драйвер сливает cards.json по id (lib/merge.ts),
+  // чтобы fastForward падал в настоящий 3-way merge без потери правок двух устройств.
+  const opts = {
     fs: fsRef(),
     http,
     dir: REPO_ROOT,
+    corsProxy: corsProxyFor(cfg),
     ref: cfg.branch || "main",
     singleBranch: true,
     fastForward: true,
+    mergeDriver: flashcardsMergeDriver,
     author: {
       name: cfg.username || "Flashcards Editor",
       email: cfg.email || "flashcards@local",
     },
     onAuth: () => authFor(cfg) ?? {},
-    onMessage: (m) => onProgress?.(m),
-  });
+    onMessage: (m: string) => onProgress?.(m),
+  };
+  await git.pull(opts as unknown as Parameters<typeof git.pull>[0]);
 }
 
 export async function push(cfg: GitConfig, onProgress?: (m: string) => void): Promise<void> {
@@ -130,6 +146,7 @@ export async function push(cfg: GitConfig, onProgress?: (m: string) => void): Pr
     fs: fsRef(),
     http,
     dir: REPO_ROOT,
+    corsProxy: corsProxyFor(cfg),
     remote: "origin",
     ref: cfg.branch || "main",
     onAuth: () => authFor(cfg) ?? {},
@@ -175,16 +192,20 @@ export async function syncAll(
 
     committedSha = await commit(cfg, message);
 
+    // Сначала pull с 3-way merge (наш mergeDriver сливает cards.json по id).
+    // Только после успешного слияния пушим — иначе можно затереть чужие правки.
+    // Если remote ещё пуст (первый push) — pull кинет ошибку про отсутствие ветки,
+    // это нормально, продолжаем к push.
     try {
       await pull(cfg, onProgress);
       pulled = true;
     } catch (e: unknown) {
       const err = e as { code?: string; message?: string };
-      if (err.code === "MergeNotSupportedError" || /merge/i.test(err.message ?? "")) {
-        onProgress?.("Конфликт слияния — пропускаем pull, делаем push");
-      } else {
-        throw e;
-      }
+      const benign =
+        err.code === "ResolveRefError" || // ветки ещё нет на remote (пустой репозиторий)
+        /not found|couldn't find|remote does not have/i.test(err.message ?? "");
+      if (!benign) throw e; // настоящую ошибку слияния НЕ глотаем, чтобы не потерять данные
+      onProgress?.("Remote пуст — первый push");
     }
 
     await push(cfg, onProgress);

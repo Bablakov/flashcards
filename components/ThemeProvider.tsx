@@ -25,6 +25,16 @@ function applyTheme(t: Theme) {
   }
 }
 
+async function requestPersistentStorage(): Promise<void> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage?.persist) return;
+    if (await navigator.storage.persisted()) return;
+    await navigator.storage.persist();
+  } catch {
+    // best-effort, не критично
+  }
+}
+
 function readInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
   const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -42,6 +52,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setThemeState(initial);
     applyTheme(initial);
     setMounted(true);
+    // 5.2 — просим браузер/WebView не вытеснять данные (IndexedDB с репозиторием и медиа).
+    // Источник правды всё равно Git, но это снижает риск, что Android сотрёт локальную копию
+    // до того, как изменения ушли в Git.
+    void requestPersistentStorage();
   }, []);
 
   const setTheme = useCallback((t: Theme) => {

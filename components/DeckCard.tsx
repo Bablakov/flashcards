@@ -55,10 +55,17 @@ export function DeckCard({ deck, onAddCard, onEdit, onDelete }: Props) {
   return (
     <div className="deck-card" style={{ borderTop: `4px solid ${deck.color}` }}>
       <Link href={`/deck?id=${deck.id}`} className="block">
-        <div className="relative h-32 w-full overflow-hidden">
+        <div
+          className="relative h-32 w-full overflow-hidden"
+          style={{
+            background: imageUrl
+              ? `linear-gradient(135deg, ${deck.color} 0%, ${shadeColor(deck.color, -25)} 100%)`
+              : undefined,
+          }}
+        >
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+            <img src={imageUrl} alt="" className="h-full w-full object-contain" />
           ) : (
             <div
               className="flex h-full items-center justify-center"

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/Toaster";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { NativeBridge } from "@/components/NativeBridge";
 
 export const metadata: Metadata = {
   title: "Flashcards",
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-bg-base text-text-primary">
         <ThemeProvider>
+          <NativeBridge />
           <div className="mx-auto flex min-h-screen max-w-3xl flex-col">{children}</div>
           <Toaster />
         </ThemeProvider>

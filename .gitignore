@@ -9,3 +9,6 @@ android/.gradle
 android/local.properties
 .idea
 .DS_Store
+
+# Локальные скриншоты для анализа (не нужны для сборки, содержат личные данные)
+documentation/

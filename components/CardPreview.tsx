@@ -57,7 +57,11 @@ export function CardPreview({ deckId, card, onClick, onEdit, onDelete }: CardPre
         <div className="flex items-start gap-3">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt="" className="h-20 w-20 flex-shrink-0 rounded-xl object-cover" />
+            <img
+              src={imageUrl}
+              alt=""
+              className="h-20 w-20 flex-shrink-0 rounded-xl bg-bg-soft object-contain ring-1 ring-[var(--ring-base)]"
+            />
           ) : null}
           <div className="min-w-0 flex-1">
             <div className="line-clamp-3 break-words text-base text-text-primary">

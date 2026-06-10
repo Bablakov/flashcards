@@ -1,5 +1,7 @@
 "use client";
 
+import { Capacitor } from "@capacitor/core";
+
 let voicesCache: SpeechSynthesisVoice[] | null = null;
 
 function getVoices(): Promise<SpeechSynthesisVoice[]> {
@@ -63,11 +65,25 @@ function langTagFor(code: string): string {
 export async function speak(text: string, langCode: string, rate = 1): Promise<void> {
   if (typeof window === "undefined") return;
   if (!text.trim()) return;
+  const tag = langTagFor(langCode);
+
+  // Native (Android-приложение): системный TTS-движок вместо WebView speechSynthesis,
+  // который в Android WebView часто молчит (getVoices пустой).
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { TextToSpeech } = await import("@capacitor-community/text-to-speech");
+      await TextToSpeech.stop();
+      await TextToSpeech.speak({ text, lang: tag, rate: Math.max(0.1, Math.min(2, rate)) });
+      return;
+    } catch {
+      // если нативный движок недоступен — падаем в web-ветку ниже
+    }
+  }
+
   const synth = window.speechSynthesis;
   if (!synth) return;
   synth.cancel();
   const voices = await getVoices();
-  const tag = langTagFor(langCode);
   const voice =
     voices.find((v) => v.lang === tag) ??
     voices.find((v) => v.lang.startsWith(langCode)) ??
@@ -80,6 +96,12 @@ export async function speak(text: string, langCode: string, rate = 1): Promise<v
 }
 
 export function stopSpeak() {
+  if (Capacitor.isNativePlatform()) {
+    import("@capacitor-community/text-to-speech")
+      .then(({ TextToSpeech }) => TextToSpeech.stop())
+      .catch(() => {});
+    return;
+  }
   if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }

@@ -11,6 +11,7 @@ import {
   DeckSummary,
 } from "./types";
 import { deckProgress } from "./srs";
+import { scheduleAutoSync } from "./autosync";
 import {
   DECKS_DIR,
   ensureDir,
@@ -66,11 +67,13 @@ export async function getCards(deckId: string): Promise<Card[]> {
 async function writeDeckMeta(deck: Deck): Promise<void> {
   await ensureDir(deckPath(deck.id));
   await writeJson(deckMetaPath(deck.id), deck);
+  scheduleAutoSync();
 }
 
 async function writeCards(deckId: string, cards: Card[]): Promise<void> {
   await ensureDir(deckPath(deckId));
   await writeJson(deckCardsPath(deckId), cards);
+  scheduleAutoSync();
 }
 
 export async function listDeckSummaries(): Promise<DeckSummary[]> {
@@ -161,6 +164,7 @@ export async function setDeckSettings(
 
 export async function deleteDeck(deckId: string): Promise<void> {
   await removePath(deckPath(deckId));
+  scheduleAutoSync();
 }
 
 export async function addCard(

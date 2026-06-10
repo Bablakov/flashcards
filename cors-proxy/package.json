@@ -1,0 +1,13 @@
+{
+  "name": "flashcards-cors-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted CORS proxy for Flashcards Git sync (isomorphic-git compatible)",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

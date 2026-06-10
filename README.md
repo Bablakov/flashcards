@@ -110,6 +110,23 @@ npm run build
 
 ## Сборка APK (Android)
 
+### Вариант 1 — GitHub Actions (рекомендую, **Android Studio не нужен**)
+
+Workflow `.github/workflows/android.yml` собирает APK при каждом пуше в `main`.
+
+1. Запушь репо на GitHub.
+2. Открой вкладку **Actions** → выбери ран **Android APK** → вкладка **Summary**
+   внизу: **Artifacts → flashcards-apk** — скачай ZIP, внутри `flashcards-<номер>.apk`.
+3. Скопируй APK на телефон, разреши установку из неизвестных источников, установи.
+4. **Релизы:** если поставить тэг `v0.2.0` → workflow создаст GitHub Release с APK
+   автоматически (`git tag v0.2.0 && git push --tags`).
+
+> APK подписан debug-ключом Android (этого хватает для личного использования).
+> Для Google Play нужна release-сборка и подпись release-keystore — см. `android-release.md`
+> (TBD), если решишь публиковать в магазин.
+
+### Вариант 2 — локально через Android Studio
+
 ```powershell
 npm install
 npm run build              # создаёт out/

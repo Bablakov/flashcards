@@ -84,6 +84,12 @@ export const GitConfigSchema = z.object({
   username: z.string().default(""),
   email: z.string().default(""),
   token: z.string().default(""),
+  /**
+   * URL собственного CORS-прокси (вариант B). GitHub не отдаёт CORS на git-smart-HTTP,
+   * поэтому push/pull из браузера и Android WebView идут через свой прокси.
+   * Пусто = прямое соединение (работает только из нативного git/CapacitorHttp).
+   */
+  corsProxy: z.string().default(""),
   autoSync: z.boolean().default(false),
 });
 export type GitConfig = z.infer<typeof GitConfigSchema>;

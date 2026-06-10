@@ -83,6 +83,13 @@ export default function SettingsPage() {
     }
   }
 
+  function handleWipeToken() {
+    const next = { ...cfg, token: "" };
+    setCfg(next);
+    saveGitConfig(next);
+    toast("Токен стёрт с этого устройства", "success");
+  }
+
   return (
     <>
       <TopBar back title="Настройки" rightSlot={<div className="w-10" />} />
@@ -165,6 +172,34 @@ export default function SettingsPage() {
                 доступ на запись (contents: read/write) к одному репозиторию.
               </p>
             </Field>
+            <Field label="CORS-прокси">
+              <input
+                value={cfg.corsProxy}
+                onChange={(e) => update("corsProxy", e.target.value)}
+                className="field"
+                placeholder="https://your-proxy.workers.dev"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+              <p className="mt-1 text-xs text-text-faint">
+                GitHub не отдаёт CORS, поэтому синхронизация из браузера/телефона идёт через свой
+                прокси. Разверни его из папки <code>cors-proxy/</code> (Cloudflare Workers, бесплатно)
+                и вставь сюда URL. Пусто — синхронизация только нативным git с ПК.
+              </p>
+            </Field>
+            <label className="flex items-center gap-3 rounded-xl bg-bg-soft px-4 py-3 ring-1 ring-[var(--ring-base)]">
+              <input
+                type="checkbox"
+                checked={cfg.autoSync}
+                onChange={(e) => update("autoSync", e.target.checked)}
+                className="h-4 w-4 accent-[var(--accent)]"
+              />
+              <span className="text-sm text-text-secondary">
+                Авто-синхронизация — пушить изменения в Git автоматически (нужны URL, токен и
+                прокси)
+              </span>
+            </label>
           </div>
 
           <div className="flex flex-wrap gap-2 pt-2">
@@ -197,12 +232,25 @@ export default function SettingsPage() {
 
         <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
           <div className="text-lg font-semibold text-text-primary">Опасная зона</div>
-          <button
-            onClick={handleWipeRepo}
-            className="pill-button bg-red-500/15 text-red-500 hover:bg-red-500/30"
-          >
-            <Trash2 size={16} /> Удалить локальные данные
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleWipeToken}
+              disabled={!cfg.token}
+              className="pill-button bg-amber-500/15 text-amber-600 hover:bg-amber-500/30"
+            >
+              <Trash2 size={16} /> Стереть токен
+            </button>
+            <button
+              onClick={handleWipeRepo}
+              className="pill-button bg-red-500/15 text-red-500 hover:bg-red-500/30"
+            >
+              <Trash2 size={16} /> Удалить локальные данные
+            </button>
+          </div>
+          <p className="text-xs text-text-faint">
+            «Стереть токен» убирает Personal Access Token из этого устройства (на общем/чужом
+            устройстве). Колоды и репозиторий остаются.
+          </p>
         </section>
 
         <section className="space-y-2 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
@@ -215,7 +263,11 @@ export default function SettingsPage() {
               GitHub → Settings → Developer settings → Personal access tokens (Fine-grained) → создай
               токен с правом «Contents: Read and write» на этот репо.
             </li>
-            <li>Вставь URL и токен на этой странице, нажми «Клонировать».</li>
+            <li>
+              Разверни CORS-прокси из папки <code>cors-proxy/</code> (одна команда{" "}
+              <code>npx wrangler deploy</code>) и вставь его URL в поле «CORS-прокси».
+            </li>
+            <li>Вставь URL репозитория и токен на этой странице, нажми «Клонировать».</li>
             <li>Создавай колоды/карточки — нажимай «Sync» чтобы запушить.</li>
             <li>На другом устройстве сделай то же самое — данные подтянутся.</li>
           </ol>

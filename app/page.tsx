@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, RefreshCcw, Search } from "lucide-react";
+import { Plus, RefreshCcw, Search, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { DeckSummary } from "@/lib/types";
@@ -20,6 +20,7 @@ import { loadGitConfig } from "@/lib/settings";
 import { maybeInstallSeed } from "@/lib/seed";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
 import { DeckCard } from "@/components/DeckCard";
+import { importPackedDeck, isPackedDeck } from "@/lib/pack";
 
 export default function HomePage() {
   const router = useRouter();
@@ -107,6 +108,34 @@ export default function HomePage() {
   async function handleAddCard(deckId: string) {
     const card = await addCard(deckId, { text: "" }, { text: "" });
     router.push(`/card?deck=${deckId}&id=${card.id}`);
+  }
+
+  function handleImportDeck() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".fcdeck,.json,application/json";
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      try {
+        const text = await f.text();
+        const parsed = JSON.parse(text);
+        if (!isPackedDeck(parsed)) {
+          toast("Не похоже на колоду (.fcdeck)", "error");
+          return;
+        }
+        const res = await importPackedDeck(parsed);
+        toast(
+          `Колода импортирована: ${res.cardCount} карт, ${res.mediaCount} медиа`,
+          "success",
+        );
+        await refresh();
+        router.push(`/deck?id=${res.deckId}`);
+      } catch (e: unknown) {
+        toast(`Ошибка импорта: ${(e as Error).message}`, "error");
+      }
+    };
+    input.click();
   }
 
   async function handleSync() {
@@ -227,9 +256,10 @@ export default function HomePage() {
 
       <BottomActions>
         <ActionButton icon={<Plus size={22} />} label="Колода" onClick={openCreate} />
+        <ActionButton icon={<Upload size={22} />} label="Импорт" onClick={handleImportDeck} />
         <ActionButton
           icon={<RefreshCcw size={22} className={busy ? "animate-spin" : ""} />}
-          label={busy ? "Sync..." : "Синхронизация"}
+          label={busy ? "Sync..." : "Синхр."}
           onClick={handleSync}
           disabled={busy}
         />
