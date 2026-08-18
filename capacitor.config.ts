@@ -10,6 +10,13 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
   },
+  plugins: {
+    // Нативный HTTP: запросы git идут мимо браузерного CORS прямо в GitHub,
+    // поэтому на телефоне сторонний прокси не нужен (§11).
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
 };
 
 export default config;

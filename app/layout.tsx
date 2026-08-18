@@ -4,6 +4,7 @@ import { Toaster } from "@/components/Toaster";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { NativeBridge } from "@/components/NativeBridge";
 import { DesktopBridge } from "@/components/DesktopBridge";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 export const metadata: Metadata = {
   title: "Flashcards",
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <NativeBridge />
           <DesktopBridge />
+          <UpdateBanner />
           <div className="mx-auto flex min-h-screen max-w-3xl flex-col">{children}</div>
           <Toaster />
         </ThemeProvider>
