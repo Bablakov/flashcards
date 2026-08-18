@@ -38,12 +38,26 @@ jobs:
         run: npm run test:model
 
       # Установщик NSIS: путь установки выбирает пользователь, ярлыки создаются.
-      # На тег v* electron-builder публикует релиз — оттуда же приложение берёт
-      # обновления через electron-updater.
+      # Публикацию electron-builder НЕ делает: он создавал собственный черновик
+      # релиза, из-за чего .exe и latest.yml не попадали в опубликованный релиз
+      # рядом с APK. Файлы выкладываются отдельным шагом ниже.
       - name: Build installer
+        run: npx electron-builder --win nsis --publish never
+
+      # latest.yml обязателен: без него автообновление ПК-версии не видит новую сборку.
+      - name: Attach installer to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        run: |
+          for i in $(seq 1 40); do
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then break; fi
+            echo "жду, пока сборка Android создаст релиз ($i)"
+            sleep 15
+          done
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" dist-desktop/*.exe dist-desktop/latest.yml --clobber
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
