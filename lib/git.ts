@@ -224,14 +224,17 @@ export async function syncAll(
   let pushed = false;
   let committedSha: string | null = null;
 
+  let stage = "подготовка";
   try {
     if (!(await isInitialized())) {
+      stage = "клонирование";
       await clone(cfg, onProgress);
       pulled = true;
     }
     await ensureRemote(cfg);
     await configureIdentity(cfg);
 
+    stage = "коммит";
     committedSha = await commit(cfg, message);
 
     // Сначала pull с 3-way merge (наш mergeDriver сливает cards.json по id).
@@ -239,6 +242,7 @@ export async function syncAll(
     // Если remote ещё пуст (первый push) — pull кинет ошибку про отсутствие ветки,
     // это нормально, продолжаем к push.
     try {
+      stage = "получение изменений (pull)";
       await pull(cfg, onProgress);
       pulled = true;
     } catch (e: unknown) {
@@ -250,6 +254,7 @@ export async function syncAll(
       onProgress?.("Remote пуст — первый push");
     }
 
+    stage = "отправка (push)";
     await push(cfg, onProgress);
     pushed = true;
 
@@ -261,7 +266,9 @@ export async function syncAll(
     });
     return { pulled, committed: committedSha, pushed, message: "Синхронизация завершена" };
   } catch (e: unknown) {
-    const explained = explainGitError(e);
+    // Этап в тексте ошибки — чтобы по одному сообщению было видно, где рвётся:
+    // на чтении, на отправке или ещё на подключении.
+    const explained = `Этап «${stage}». ${explainGitError(e)}`;
     saveSyncStatus({ ...status, lastError: explained });
     throw new Error(explained);
   }

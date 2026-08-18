@@ -12,6 +12,7 @@ import {
   Sparkles,
   Pencil,
   FolderPlus,
+  MoreHorizontal,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
@@ -71,6 +72,7 @@ function DeckPage() {
   const [crumbs, setCrumbs] = useState<{ id: string; name: string }[]>([]);
   const [parentOptions, setParentOptions] = useState<GroupOption[]>([]);
   const [subgroupOpen, setSubgroupOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortMode>("createdDesc");
@@ -451,6 +453,46 @@ function DeckPage() {
         </div>
       </main>
 
+      {/* На телефоне шесть кнопок в ряд не помещались и превращались в кашу,
+          поэтому редкие действия убраны под «Ещё». */}
+      {moreOpen && (
+        <div className="modal-backdrop items-end" onClick={() => setMoreOpen(false)}>
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-bg-card p-2 ring-1 ring-[var(--ring-base)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="menu-item w-full"
+              onClick={() => {
+                setMoreOpen(false);
+                handleImport();
+              }}
+            >
+              <FileSpreadsheet size={18} /> Импорт CSV или .fcdeck
+            </button>
+            <button
+              className="menu-item w-full disabled:opacity-40"
+              disabled={cards.length === 0}
+              onClick={() => {
+                setMoreOpen(false);
+                setExportOpen(true);
+              }}
+            >
+              <Download size={18} /> Экспорт
+            </button>
+            <button
+              className="menu-item w-full"
+              onClick={() => {
+                setMoreOpen(false);
+                router.push(`/options?deck=${deckId}`);
+              }}
+            >
+              <Sparkles size={18} /> Опции группы
+            </button>
+          </div>
+        </div>
+      )}
+
       <BottomActions>
         <ActionButton
           icon={<Play size={22} />}
@@ -460,18 +502,7 @@ function DeckPage() {
         />
         <ActionButton icon={<Plus size={22} />} label="Карточка" onClick={handleAdd} />
         <ActionButton icon={<FolderPlus size={22} />} label="Подгруппа" onClick={openSubgroup} />
-        <ActionButton icon={<FileSpreadsheet size={22} />} label="Импорт" onClick={handleImport} />
-        <ActionButton
-          icon={<Download size={22} />}
-          label="Экспорт"
-          onClick={() => setExportOpen(true)}
-          disabled={cards.length === 0}
-        />
-        <ActionButton
-          icon={<Sparkles size={22} />}
-          label="Опции"
-          onClick={() => router.push(`/options?deck=${deckId}`)}
-        />
+        <ActionButton icon={<MoreHorizontal size={22} />} label="Ещё" onClick={() => setMoreOpen(true)} />
       </BottomActions>
 
       {deck && (

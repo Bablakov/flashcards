@@ -11,6 +11,7 @@ import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
 import { useTheme } from "@/components/ThemeProvider";
 import { WeekScheduleEditor } from "@/components/WeekSchedule";
+import { AboutBlock } from "@/components/AboutBlock";
 import { AppSettings, AppSettingsSchema, WeekSchedule } from "@/lib/model";
 import { readSettings, writeSettings } from "@/lib/store";
 import {
@@ -148,6 +149,8 @@ export default function SettingsPage() {
     <>
       <TopBar back title="Настройки" rightSlot={<div className="w-10" />} />
       <main className="flex-1 px-4 pb-12 pt-2">
+        <AboutBlock />
+
         <section className="mb-6 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
           <div className="mb-3 text-lg font-semibold text-text-primary">Внешний вид</div>
           <div className="flex gap-2">

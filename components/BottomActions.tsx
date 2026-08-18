@@ -29,12 +29,12 @@ export function ActionButton({ icon, label, onClick, disabled }: ActionButtonPro
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex w-full flex-col items-center gap-1 rounded-xl px-2 py-2 text-xs text-text-secondary transition disabled:opacity-40",
+        "flex w-full min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] text-text-secondary transition disabled:opacity-40",
       )}
       style={{ ["--hover-bg" as string]: "var(--ring-base)" }}
     >
       <span className="flex h-8 w-8 items-center justify-center text-text-primary">{icon}</span>
-      <span className="text-center leading-tight">{label}</span>
+      <span className="w-full truncate text-center leading-tight">{label}</span>
     </button>
   );
 }
