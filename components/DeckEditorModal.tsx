@@ -25,6 +25,7 @@ export interface DeckEditorValue {
   description: string;
   frontLanguage: string;
   backLanguage: string;
+  parentId: string | null;
 }
 
 interface Props {
@@ -32,11 +33,22 @@ interface Props {
   title: string;
   initial?: Partial<DeckEditorValue> & { id?: string };
   deckId?: string;
+  /** Куда можно поместить группу. Пусто — выбор родителя не показываем. */
+  parentOptions?: { id: string; label: string }[];
   onSave: (val: DeckEditorValue) => Promise<void> | void;
   onClose: () => void;
 }
 
-export function DeckEditorModal({ open, title, initial, deckId, onSave, onClose }: Props) {
+export function DeckEditorModal({
+  open,
+  title,
+  initial,
+  deckId,
+  parentOptions,
+  onSave,
+  onClose,
+}: Props) {
+  const [parentId, setParentId] = useState<string | null>(initial?.parentId ?? null);
   const [name, setName] = useState(initial?.name ?? "");
   const [color, setColor] = useState(initial?.color ?? PALETTE[0]);
   const [image, setImage] = useState<string | null>(initial?.image ?? null);
@@ -54,6 +66,7 @@ export function DeckEditorModal({ open, title, initial, deckId, onSave, onClose 
     setDescription(initial?.description ?? "");
     setFrontLanguage(initial?.frontLanguage ?? "ru");
     setBackLanguage(initial?.backLanguage ?? "en");
+    setParentId(initial?.parentId ?? null);
   }, [open, initial]);
 
   useEffect(() => {
@@ -118,6 +131,7 @@ export function DeckEditorModal({ open, title, initial, deckId, onSave, onClose 
         description: description.trim(),
         frontLanguage,
         backLanguage,
+        parentId,
       });
     } finally {
       setSaving(false);
@@ -145,6 +159,26 @@ export function DeckEditorModal({ open, title, initial, deckId, onSave, onClose 
               placeholder="Английский A1, Биология, ..."
             />
           </div>
+
+          {parentOptions && (
+            <label className="block">
+              <div className="mb-1 text-sm font-medium text-text-secondary">
+                Внутри группы
+              </div>
+              <select
+                value={parentId ?? ""}
+                onChange={(e) => setParentId(e.target.value || null)}
+                className="field"
+              >
+                <option value="">— верхний уровень —</option>
+                {parentOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <LanguageSelect

@@ -11,18 +11,27 @@ import {
   Sliders,
   Sparkles,
   Pencil,
+  FolderPlus,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { CardPreview } from "@/components/CardPreview";
-import { Card, Deck, languageInfo } from "@/lib/types";
+import { Card, Deck, DeckSummary, languageInfo } from "@/lib/types";
 import {
   addCard,
+  createDeck,
   deleteCard,
+  deleteDeck,
+  getBreadcrumbs,
   getCards,
   getDeck,
+  listGroupOptions,
+  listGroupSummaries,
+  moveGroup,
   updateDeck,
+  type GroupOption,
 } from "@/lib/repository";
+import { DeckCard } from "@/components/DeckCard";
 import { toast } from "@/components/Toaster";
 import { parseCsv, cardsToCsv } from "@/lib/csv";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
@@ -58,6 +67,10 @@ function DeckPage() {
   const deckId = sp.get("id") ?? "";
   const [deck, setDeck] = useState<Deck | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
+  const [subgroups, setSubgroups] = useState<DeckSummary[]>([]);
+  const [crumbs, setCrumbs] = useState<{ id: string; name: string }[]>([]);
+  const [parentOptions, setParentOptions] = useState<GroupOption[]>([]);
+  const [subgroupOpen, setSubgroupOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<SortMode>("createdDesc");
@@ -73,6 +86,8 @@ function DeckPage() {
       const d = await getDeck(deckId);
       setDeck(d);
       setCards(await getCards(deckId));
+      setSubgroups(await listGroupSummaries(deckId));
+      setCrumbs(await getBreadcrumbs(deckId));
     } finally {
       setLoading(false);
     }
@@ -211,6 +226,7 @@ function DeckPage() {
     description: string;
     frontLanguage: string;
     backLanguage: string;
+    parentId: string | null;
   }) {
     const persistedImage = await persistPendingDeckImage(deckId, val.image);
     await updateDeck(deckId, {
@@ -223,9 +239,59 @@ function DeckPage() {
         backLanguage: val.backLanguage,
       } as never,
     });
-    toast("Сохранено", "success");
+    const moved = await moveGroup(deckId, val.parentId);
+    toast(moved ? "Сохранено" : "Группу нельзя перенести внутрь самой себя", moved ? "success" : "error");
     setEditorOpen(false);
     await refresh();
+  }
+
+  /** Подгруппа создаётся прямо внутри текущей группы — иерархия любой глубины (§5.1). */
+  async function handleCreateSubgroup(val: {
+    name: string;
+    color: string;
+    image: string | null;
+    description: string;
+    frontLanguage: string;
+    backLanguage: string;
+    parentId: string | null;
+  }) {
+    const created = await createDeck({
+      name: val.name,
+      color: val.color,
+      image: null,
+      description: val.description,
+      frontLanguage: val.frontLanguage,
+      backLanguage: val.backLanguage,
+      parentId: val.parentId ?? deckId,
+    });
+    const persisted = await persistPendingDeckImage(created.id, val.image);
+    if (persisted) await updateDeck(created.id, { image: persisted });
+    toast("Подгруппа создана", "success");
+    setSubgroupOpen(false);
+    await refresh();
+  }
+
+  async function openEditor() {
+    setParentOptions(await listGroupOptions(deckId));
+    setEditorOpen(true);
+  }
+
+  async function openSubgroup() {
+    setParentOptions(await listGroupOptions());
+    setSubgroupOpen(true);
+  }
+
+  async function handleDeleteSubgroup(id: string) {
+    const g = subgroups.find((x) => x.id === id);
+    if (!window.confirm(`Удалить группу «${g?.name ?? ""}» со всем содержимым?`)) return;
+    await deleteDeck(id);
+    toast("Группа удалена", "success");
+    await refresh();
+  }
+
+  async function handleAddCardTo(groupId: string) {
+    const card = await addCard(groupId, { text: "" }, { text: "" });
+    router.push(`/card?deck=${groupId}&id=${card.id}`);
   }
 
   if (!deckId) {
@@ -247,7 +313,7 @@ function DeckPage() {
         back
         rightSlot={
           <>
-            <button className="icon-btn" onClick={() => setEditorOpen(true)} aria-label="Редактировать колоду">
+            <button className="icon-btn" onClick={openEditor} aria-label="Редактировать группу">
               <Pencil size={18} />
             </button>
             <button
@@ -262,6 +328,29 @@ function DeckPage() {
       />
 
       <main className="flex-1 px-4 pb-28 pt-2">
+        {crumbs.length > 0 && (
+          <nav className="mb-2 flex flex-wrap items-center gap-1 text-xs text-text-muted">
+            <button className="hover:text-text-primary" onClick={() => router.push("/")}>
+              Все группы
+            </button>
+            {crumbs.map((c, i) => (
+              <span key={c.id} className="flex items-center gap-1">
+                <span className="text-text-faint">/</span>
+                {i === crumbs.length - 1 ? (
+                  <span className="text-text-primary">{c.name}</span>
+                ) : (
+                  <button
+                    className="hover:text-text-primary"
+                    onClick={() => router.push(`/deck?id=${c.id}`)}
+                  >
+                    {c.name}
+                  </button>
+                )}
+              </span>
+            ))}
+          </nav>
+        )}
+
         {deck && (
           <div className="mb-3 flex items-center gap-2 text-xs text-text-muted">
             {front && (
@@ -321,9 +410,30 @@ function DeckPage() {
 
         {loading && <div className="py-12 text-center text-text-muted">Загрузка...</div>}
 
+        {subgroups.length > 0 && (
+          <section className="mb-4">
+            <div className="mb-2 text-sm font-medium text-text-secondary">
+              Подгруппы ({subgroups.length})
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {subgroups.map((g) => (
+                <DeckCard
+                  key={g.id}
+                  deck={g}
+                  onAddCard={handleAddCardTo}
+                  onEdit={(id) => router.push(`/deck?id=${id}`)}
+                  onDelete={handleDeleteSubgroup}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         {!loading && visible.length === 0 && (
           <div className="py-12 text-center text-text-muted">
-            Карточек нет. Нажми «Добавить» или импортируй CSV.
+            {subgroups.length > 0
+              ? "В самой группе карточек нет — они лежат в подгруппах."
+              : "Карточек нет. Нажми «Добавить» или импортируй CSV."}
           </div>
         )}
 
@@ -348,7 +458,8 @@ function DeckPage() {
           onClick={() => router.push(`/study?deck=${deckId}`)}
           disabled={cards.length === 0}
         />
-        <ActionButton icon={<Plus size={22} />} label="Добавить" onClick={handleAdd} />
+        <ActionButton icon={<Plus size={22} />} label="Карточка" onClick={handleAdd} />
+        <ActionButton icon={<FolderPlus size={22} />} label="Подгруппа" onClick={openSubgroup} />
         <ActionButton icon={<FileSpreadsheet size={22} />} label="Импорт" onClick={handleImport} />
         <ActionButton
           icon={<Download size={22} />}
@@ -366,8 +477,9 @@ function DeckPage() {
       {deck && (
         <DeckEditorModal
           open={editorOpen}
-          title="Редактировать колоду"
+          title="Редактировать группу"
           deckId={deckId}
+          parentOptions={parentOptions}
           initial={{
             name: deck.name,
             color: deck.color,
@@ -375,11 +487,25 @@ function DeckPage() {
             description: deck.description,
             frontLanguage: deck.settings.frontLanguage,
             backLanguage: deck.settings.backLanguage,
+            parentId: crumbs.length > 1 ? crumbs[crumbs.length - 2].id : null,
           }}
           onSave={handleSaveDeck}
           onClose={() => setEditorOpen(false)}
         />
       )}
+
+      <DeckEditorModal
+        open={subgroupOpen}
+        title="Новая подгруппа"
+        parentOptions={parentOptions}
+        initial={{
+          parentId: deckId,
+          frontLanguage: deck?.settings.frontLanguage,
+          backLanguage: deck?.settings.backLanguage,
+        }}
+        onSave={handleCreateSubgroup}
+        onClose={() => setSubgroupOpen(false)}
+      />
 
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => !exporting && setExportOpen(false)}>

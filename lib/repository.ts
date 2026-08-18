@@ -18,8 +18,10 @@ import { bytesToDataUrl } from "./fs";
 import { getProgress, getProgressMap, invalidateProgress, EMPTY_PROGRESS } from "./progress";
 import {
   appendJournal,
+  canReparent,
   childrenOf,
   descendantIds,
+  pathTo,
   getCard as storeGetCard,
   getGroup,
   guessMime,
@@ -118,12 +120,17 @@ export async function getDeck(deckId: string): Promise<Deck | null> {
 }
 
 export async function listDeckSummaries(): Promise<DeckSummary[]> {
+  return await listGroupSummaries(null);
+}
+
+/** Сводка по прямым потомкам группы; счётчики учитывают все вложенные подгруппы. */
+export async function listGroupSummaries(parentId: string | null): Promise<DeckSummary[]> {
   const groups = await allGroups();
   const cards = await allCards();
   const progress = await getProgressMap();
   const out: DeckSummary[] = [];
 
-  for (const group of childrenOf(groups, null)) {
+  for (const group of childrenOf(groups, parentId)) {
     const ids = new Set(descendantIds(groups, group.id));
     const own = cards.filter((c) => ids.has(c.groupId));
     const learned = own.filter((c) => (progress.get(c.id) ?? EMPTY_PROGRESS).box >= 5).length;
@@ -135,6 +142,61 @@ export async function listDeckSummaries(): Promise<DeckSummary[]> {
   }
   out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return out;
+}
+
+/** Путь от корня до группы — для хлебных крошек. */
+export async function getBreadcrumbs(groupId: string): Promise<{ id: string; name: string }[]> {
+  return pathTo(await allGroups(), groupId).map((g) => ({ id: g.id, name: g.name }));
+}
+
+export interface GroupOption {
+  id: string;
+  label: string;
+  depth: number;
+}
+
+/**
+ * Плоский список групп для выпадающих списков («куда переместить»).
+ * `excludeSubtreeOf` убирает саму группу и всех её потомков — внутрь себя не переносят.
+ */
+export async function listGroupOptions(excludeSubtreeOf?: string): Promise<GroupOption[]> {
+  const groups = await allGroups();
+  const excluded = excludeSubtreeOf ? new Set(descendantIds(groups, excludeSubtreeOf)) : new Set<string>();
+  const out: GroupOption[] = [];
+  const walk = (parentId: string | null, depth: number) => {
+    for (const g of childrenOf(groups, parentId)) {
+      if (excluded.has(g.id)) continue;
+      out.push({ id: g.id, label: `${"— ".repeat(depth)}${g.name}`, depth });
+      walk(g.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+/** Перенос ветки. Внутрь собственного потомка перенести нельзя — иначе появится цикл. */
+export async function moveGroup(groupId: string, newParentId: string | null): Promise<boolean> {
+  await ensureReady();
+  const groups = await allGroups();
+  if (!canReparent(groups, groupId, newParentId)) return false;
+  const group = groups.find((g) => g.id === groupId);
+  if (!group) return false;
+  await writeGroup({ ...group, parentId: newParentId });
+  invalidateCache();
+  scheduleAutoSync();
+  return true;
+}
+
+/** Перенос карточки в другую группу. */
+export async function moveCard(cardId: string, newGroupId: string): Promise<boolean> {
+  await ensureReady();
+  const content = await storeGetCard(cardId);
+  const target = await getGroup(newGroupId);
+  if (!content || !target) return false;
+  await writeCard({ ...content, groupId: newGroupId });
+  invalidateCache();
+  scheduleAutoSync();
+  return true;
 }
 
 export interface CreateDeckInput {

@@ -5,7 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Box, Card, Deck, languageInfo } from "@/lib/types";
-import { addCard, deleteCard, getCards, getDeck, saveMedia, updateCard } from "@/lib/repository";
+import {
+  addCard,
+  deleteCard,
+  getCards,
+  getDeck,
+  listGroupOptions,
+  moveCard,
+  saveMedia,
+  updateCard,
+  type GroupOption,
+} from "@/lib/repository";
 import { fileToBytes } from "@/lib/media";
 import { ImageInput } from "@/components/ImageInput";
 import { toast } from "@/components/Toaster";
@@ -29,6 +39,8 @@ function CardEditor() {
   const [card, setCard] = useState<Card | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [groupId, setGroupId] = useState(deckId);
 
   useEffect(() => {
     if (!deckId || !cardId) {
@@ -36,13 +48,32 @@ function CardEditor() {
       return;
     }
     (async () => {
-      const [d, cards] = await Promise.all([getDeck(deckId), getCards(deckId)]);
+      const [d, cards, opts] = await Promise.all([
+        getDeck(deckId),
+        getCards(deckId),
+        listGroupOptions(),
+      ]);
       setDeck(d);
+      setGroups(opts);
+      setGroupId(deckId);
       const found = cards.find((c) => c.id === cardId) ?? null;
       setCard(found);
       setLoading(false);
     })();
   }, [deckId, cardId]);
+
+  /** Перенос карточки в другую группу — карточка живёт отдельным файлом, меняется одно поле. */
+  async function handleMove(nextGroupId: string) {
+    if (!card || nextGroupId === groupId) return;
+    const ok = await moveCard(card.id, nextGroupId);
+    if (!ok) {
+      toast("Не удалось перенести карточку", "error");
+      return;
+    }
+    setGroupId(nextGroupId);
+    toast("Карточка перенесена", "success");
+    router.replace(`/card?deck=${nextGroupId}&id=${card.id}`);
+  }
 
   async function handleImagePicked(side: "front" | "back", file: File) {
     if (!card) return;
@@ -183,6 +214,21 @@ function CardEditor() {
             <div>Хорошо: {card.goodCount}</div>
             <div>Плохо: {card.badCount}</div>
           </div>
+        </section>
+
+        <section className="space-y-2">
+          <div className="text-sm font-medium text-text-secondary">Группа</div>
+          <select
+            value={groupId}
+            onChange={(e) => handleMove(e.target.value)}
+            className="field"
+          >
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.label}
+              </option>
+            ))}
+          </select>
         </section>
 
         <section className="space-y-2">

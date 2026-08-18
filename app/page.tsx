@@ -11,8 +11,12 @@ import {
   createDeck,
   deleteDeck,
   getDeck,
+  getBreadcrumbs,
   listDeckSummaries,
+  listGroupOptions,
+  moveGroup,
   updateDeck,
+  type GroupOption,
 } from "@/lib/repository";
 import { toast } from "@/components/Toaster";
 import { syncAll, pendingChangesCount } from "@/lib/git";
@@ -31,6 +35,7 @@ export default function HomePage() {
   const [filter, setFilter] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [parentOptions, setParentOptions] = useState<GroupOption[]>([]);
   const [editingInitial, setEditingInitial] = useState<{
     name: string;
     color: string;
@@ -38,6 +43,7 @@ export default function HomePage() {
     description: string;
     frontLanguage: string;
     backLanguage: string;
+    parentId: string | null;
   } | null>(null);
 
   const totalCards = useMemo(() => decks.reduce((s, d) => s + d.cardCount, 0), [decks]);
@@ -76,16 +82,19 @@ export default function HomePage() {
     })();
   }, []);
 
-  function openCreate() {
+  async function openCreate() {
     setEditingId(null);
     setEditingInitial(null);
+    setParentOptions(await listGroupOptions());
     setEditorOpen(true);
   }
 
   async function openEdit(id: string) {
     const d = await getDeck(id);
     if (!d) return;
+    const crumbs = await getBreadcrumbs(id);
     setEditingId(id);
+    setParentOptions(await listGroupOptions(id));
     setEditingInitial({
       name: d.name,
       color: d.color,
@@ -93,6 +102,7 @@ export default function HomePage() {
       description: d.description,
       frontLanguage: d.settings.frontLanguage,
       backLanguage: d.settings.backLanguage,
+      parentId: crumbs.length > 1 ? crumbs[crumbs.length - 2].id : null,
     });
     setEditorOpen(true);
   }
@@ -164,6 +174,7 @@ export default function HomePage() {
     description: string;
     frontLanguage: string;
     backLanguage: string;
+    parentId: string | null;
   }) {
     if (editingId) {
       await updateDeck(editingId, {
@@ -176,7 +187,8 @@ export default function HomePage() {
           backLanguage: val.backLanguage,
         } as never,
       });
-      toast("Колода обновлена", "success");
+      const moved = await moveGroup(editingId, val.parentId);
+      toast(moved ? "Группа обновлена" : "Группу нельзя переместить внутрь самой себя", moved ? "success" : "error");
     } else {
       const created = await createDeck({
         name: val.name,
@@ -185,6 +197,7 @@ export default function HomePage() {
         description: val.description,
         frontLanguage: val.frontLanguage,
         backLanguage: val.backLanguage,
+        parentId: val.parentId,
       });
       const persistedImage = await persistPendingDeckImage(created.id, val.image);
       if (persistedImage) {
@@ -255,7 +268,7 @@ export default function HomePage() {
       </main>
 
       <BottomActions>
-        <ActionButton icon={<Plus size={22} />} label="Колода" onClick={openCreate} />
+        <ActionButton icon={<Plus size={22} />} label="Группа" onClick={openCreate} />
         <ActionButton icon={<Upload size={22} />} label="Импорт" onClick={handleImportDeck} />
         <ActionButton
           icon={<RefreshCcw size={22} className={busy ? "animate-spin" : ""} />}
@@ -267,8 +280,9 @@ export default function HomePage() {
 
       <DeckEditorModal
         open={editorOpen}
-        title={editingId ? "Редактировать колоду" : "Новая колода"}
+        title={editingId ? "Редактировать группу" : "Новая группа"}
         deckId={editingId ?? undefined}
+        parentOptions={parentOptions}
         initial={editingInitial ?? undefined}
         onSave={handleSaveDeck}
         onClose={() => setEditorOpen(false)}
