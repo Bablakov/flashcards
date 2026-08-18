@@ -5,7 +5,14 @@ import { GitBranch, RefreshCcw, Trash2, Download, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { GitConfig, GitConfigSchema } from "@/lib/types";
 import { loadGitConfig, loadSyncStatus, saveGitConfig } from "@/lib/settings";
-import { checkAccess, cloneFresh, hasLocalData, isInitialized, pendingChangesCount } from "@/lib/git";
+import {
+  checkAccess,
+  cloneFresh,
+  hasLocalData,
+  isInitialized,
+  pendingChangesCount,
+  rebuildLocalRepo,
+} from "@/lib/git";
 import { onSyncStateChange, syncNow } from "@/lib/autosync";
 import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
@@ -135,6 +142,22 @@ export default function SettingsPage() {
       const msg = (e as Error).message;
       setAccess(msg);
       toast(msg, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Чинит служебную часть репозитория, сохраняя карточки на устройстве. */
+  async function handleRebuild() {
+    persist();
+    setBusy(true);
+    try {
+      await rebuildLocalRepo(cfg, (m) => toast(m));
+      await syncNow((m) => toast(m));
+      toast("Локальный репозиторий пересобран, данные на месте", "success");
+      await refresh();
+    } catch (e: unknown) {
+      toast(`Ошибка: ${(e as Error).message}`, "error");
     } finally {
       setBusy(false);
     }
@@ -287,6 +310,14 @@ export default function SettingsPage() {
               className="pill-button bg-sky-500/20 text-sky-600 hover:bg-sky-500/30"
             >
               Проверить доступ
+            </button>
+            <button
+              onClick={handleRebuild}
+              disabled={busy || !cfg.remoteUrl}
+              className="pill-button"
+              title="Собирает служебную часть репозитория заново; карточки на устройстве остаются"
+            >
+              Пересобрать репозиторий
             </button>
           </div>
 

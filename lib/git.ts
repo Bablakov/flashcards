@@ -161,6 +161,58 @@ async function repairIndex(): Promise<void> {
   await flushFs();
 }
 
+/**
+ * Пересборка локального репозитория без потери данных.
+ *
+ * Служебная папка .git удаляется целиком и собирается заново из удалённого
+ * репозитория, а рабочие файлы (карточки, группы, медиа, журнал) остаются
+ * на месте и попадают в первый же коммит. Это лечит «Could not find <хеш>»
+ * и любое другое повреждение локального хранилища — в отличие от
+ * «Подключить и заменить данные», которое забирает версию из репозитория
+ * и выбрасывает несинхронизированное.
+ */
+export async function rebuildLocalRepo(
+  cfg: GitConfig,
+  onProgress?: (m: string) => void,
+): Promise<void> {
+  const fs = fsRef();
+  const branch = cfg.branch || "main";
+  onProgress?.("Пересобираем локальный репозиторий...");
+
+  await removePath(`${REPO_ROOT}/.git`);
+  await git.init({ fs, dir: REPO_ROOT, defaultBranch: branch });
+  await ensureRemote(cfg);
+  await configureIdentity(cfg);
+
+  await git.fetch({
+    fs,
+    http: gitHttp,
+    dir: REPO_ROOT,
+    url: cfg.remoteUrl,
+    corsProxy: corsProxyFor(cfg),
+    ref: branch,
+    singleBranch: true,
+    depth: 1,
+    onAuth: () => authFor(cfg) ?? {},
+    onMessage: (m) => onProgress?.(m),
+  });
+
+  // Ставим локальную ветку на удалённую, НЕ трогая рабочие файлы: они и есть
+  // актуальные данные, их нужно закоммитить сверху.
+  const remoteOid = await git.resolveRef({ fs, dir: REPO_ROOT, ref: `refs/remotes/origin/${branch}` });
+  await git.writeRef({ fs, dir: REPO_ROOT, ref: `refs/heads/${branch}`, value: remoteOid, force: true });
+  await git.writeRef({
+    fs,
+    dir: REPO_ROOT,
+    ref: "HEAD",
+    value: `refs/heads/${branch}`,
+    force: true,
+    symbolic: true,
+  });
+  await flushFs();
+  onProgress?.("Локальный репозиторий пересобран");
+}
+
 export async function commit(cfg: GitConfig, message: string): Promise<string | null> {
   const fs = fsRef();
   const stats = await stageAll();
@@ -315,8 +367,15 @@ export async function syncAll(
       // не за что тут отвечать.
       if (!/could not find [0-9a-f]{7,40}/i.test((e as Error).message ?? "")) throw e;
       onProgress?.("Восстанавливаем локальный индекс...");
-      await repairIndex();
-      committedSha = await commit(cfg, message);
+      try {
+        await repairIndex();
+        committedSha = await commit(cfg, message);
+      } catch {
+        // Индекс не спасти — собираем служебную часть заново.
+        // Рабочие файлы не трогаем, поэтому ничего не теряется.
+        await rebuildLocalRepo(cfg, onProgress);
+        committedSha = await commit(cfg, message);
+      }
     }
 
     // Сначала pull с 3-way merge (наш mergeDriver сливает cards.json по id).
