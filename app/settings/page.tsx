@@ -5,7 +5,7 @@ import { GitBranch, RefreshCcw, Trash2, Download, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { GitConfig, GitConfigSchema } from "@/lib/types";
 import { loadGitConfig, loadSyncStatus, saveGitConfig } from "@/lib/settings";
-import { clone, isInitialized, pendingChangesCount } from "@/lib/git";
+import { checkAccess, clone, isInitialized, pendingChangesCount } from "@/lib/git";
 import { syncNow } from "@/lib/autosync";
 import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
@@ -28,6 +28,7 @@ export default function SettingsPage() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [app, setApp] = useState<AppSettings>(() => AppSettingsSchema.parse({}));
   const [deviceNotifications, setDeviceNotifications] = useState(true);
+  const [access, setAccess] = useState<string | null>(null);
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -100,6 +101,24 @@ export default function SettingsPage() {
       await refresh();
     } catch (e: unknown) {
       toast(`Ошибка: ${(e as Error).message}`, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Диагностика: спрашиваем у GitHub отдельно про чтение и запись (§ошибки 401/403). */
+  async function handleCheckAccess() {
+    persist();
+    setBusy(true);
+    setAccess(null);
+    try {
+      const report = await checkAccess(cfg);
+      setAccess(report.summary);
+      toast(report.summary, report.read.ok && report.write.ok ? "success" : "error");
+    } catch (e: unknown) {
+      const msg = (e as Error).message;
+      setAccess(msg);
+      toast(msg, "error");
     } finally {
       setBusy(false);
     }
@@ -244,7 +263,20 @@ export default function SettingsPage() {
               <RefreshCcw size={16} className={busy ? "animate-spin" : ""} />
               Sync (pull + push)
             </button>
+            <button
+              onClick={handleCheckAccess}
+              disabled={busy || !cfg.remoteUrl}
+              className="pill-button bg-sky-500/20 text-sky-600 hover:bg-sky-500/30"
+            >
+              Проверить доступ
+            </button>
           </div>
+
+          {access && (
+            <div className="rounded-xl bg-bg-soft px-4 py-3 text-sm text-text-secondary ring-1 ring-[var(--ring-base)]">
+              {access}
+            </div>
+          )}
 
           <div className="space-y-1 pt-3 text-xs text-text-muted">
             <div>Локальный репозиторий: {hasRepo ? "инициализирован" : "не инициализирован"}</div>

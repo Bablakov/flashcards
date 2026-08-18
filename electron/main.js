@@ -78,12 +78,21 @@ function startStaticServer() {
 /* -------------------------------------------------------- git по IPC --- */
 
 ipcMain.handle("git:request", async (_event, req) => {
-  const response = await fetch(req.url, {
-    method: req.method || "GET",
-    headers: req.headers || {},
-    body: req.body ? Buffer.from(req.body) : undefined,
-    redirect: "follow",
-  });
+  // Тайм-аут: иначе зависший запрос оставит приложение в вечной «синхронизации».
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  let response;
+  try {
+    response = await fetch(req.url, {
+      method: req.method || "GET",
+      headers: req.headers || {},
+      body: req.body ? Buffer.from(req.body) : undefined,
+      redirect: "follow",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   const buffer = Buffer.from(await response.arrayBuffer());
   const headers = {};
   response.headers.forEach((value, key) => {

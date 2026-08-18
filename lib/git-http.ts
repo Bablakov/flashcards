@@ -46,6 +46,31 @@ async function* single(bytes: Uint8Array): AsyncIterableIterator<Uint8Array> {
   yield bytes;
 }
 
+/**
+ * Тайм-аут на сетевой запрос. Без него запрос, который «повис» (типичная беда
+ * WebView на Android), оставлял бы приложение в бесконечной загрузке без всякого
+ * объяснения. Лучше честная ошибка через минуту, чем вечный спиннер.
+ */
+const NETWORK_TIMEOUT_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, url: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Сеть не ответила за 60 секунд: ${url}`));
+    }, NETWORK_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function collectBody(body: GitHttpRequest["body"]): Promise<Uint8Array | undefined> {
   if (!body) return undefined;
   if (body instanceof Uint8Array) return body;
@@ -66,15 +91,18 @@ export const gitHttp: HttpClient = {
   async request(req: GitHttpRequest): Promise<GitHttpResponse> {
     const bridge = desktop();
     if (!bridge) {
-      return await (webHttp as HttpClient).request(req);
+      return await withTimeout((webHttp as HttpClient).request(req), req.url);
     }
     const body = await collectBody(req.body);
-    const res = await bridge.gitRequest({
-      url: req.url,
-      method: req.method ?? "GET",
-      headers: req.headers ?? {},
-      body,
-    });
+    const res = await withTimeout(
+      bridge.gitRequest({
+        url: req.url,
+        method: req.method ?? "GET",
+        headers: req.headers ?? {},
+        body,
+      }),
+      req.url,
+    );
     return {
       url: res.url,
       method: res.method,

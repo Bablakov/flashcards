@@ -176,6 +176,35 @@ export async function ensureRemote(cfg: GitConfig): Promise<void> {
   }
 }
 
+/**
+ * Ошибки isomorphic-git приходят как «HTTP Error: 403 Forbidden» без объяснения,
+ * что именно не так. Здесь код превращается в понятную причину — почти всегда
+ * дело в правах токена, а не в самом репозитории.
+ */
+export function explainGitError(e: unknown): string {
+  const err = e as { code?: string; data?: { statusCode?: number; response?: string }; message?: string };
+  const status = err?.data?.statusCode;
+  const raw = err?.message ?? String(e);
+
+  if (status === 401) {
+    return "401: GitHub не принял токен. Он неверный, истёк или скопирован не полностью — выпустите новый.";
+  }
+  if (status === 403) {
+    return (
+      "403: токен принят, но у него нет права записи в этот репозиторий. " +
+      "Проверьте на GitHub: Settings → Developer settings → Fine-grained tokens → ваш токен → " +
+      "Repository access должен включать нужный репозиторий, а Permissions → Contents → Read and write."
+    );
+  }
+  if (status === 404) {
+    return "404: репозиторий не найден. Проверьте адрес (должен заканчиваться на .git) и что токен выпущен именно на него.";
+  }
+  if (/timeout|timed out/i.test(raw)) {
+    return "Превышено время ожидания сети. Проверьте интернет и попробуйте ещё раз.";
+  }
+  return raw;
+}
+
 export interface SyncReport {
   pulled: boolean;
   committed: string | null;
@@ -232,8 +261,62 @@ export async function syncAll(
     });
     return { pulled, committed: committedSha, pushed, message: "Синхронизация завершена" };
   } catch (e: unknown) {
-    const err = e as Error;
-    saveSyncStatus({ ...status, lastError: err.message ?? String(e) });
-    throw e;
+    const explained = explainGitError(e);
+    saveSyncStatus({ ...status, lastError: explained });
+    throw new Error(explained);
   }
+}
+
+export interface AccessReport {
+  read: { ok: boolean; status: number };
+  write: { ok: boolean; status: number };
+  summary: string;
+}
+
+/**
+ * Проверка доступа без изменения данных: спрашиваем у GitHub, пустит ли токен
+ * на чтение (git-upload-pack) и на запись (git-receive-pack). Это единственный
+ * способ отличить «токен без права записи» от «неверный адрес» до синхронизации.
+ */
+export async function checkAccess(cfg: GitConfig): Promise<AccessReport> {
+  if (!cfg.remoteUrl) throw new Error("Не задан адрес репозитория");
+  const base = cfg.remoteUrl.replace(/\.git$/, "");
+  const auth = cfg.token
+    ? "Basic " + btoa(`${cfg.username || "x-access-token"}:${cfg.token}`)
+    : "";
+
+  async function probe(service: string): Promise<number> {
+    const res = await gitHttp.request({
+      url: `${base}.git/info/refs?service=${service}`,
+      method: "GET",
+      headers: {
+        accept: `application/x-${service}-advertisement`,
+        "user-agent": "git/isomorphic-git",
+        ...(auth ? { authorization: auth } : {}),
+      },
+    });
+    return res.statusCode;
+  }
+
+  const readStatus = await probe("git-upload-pack");
+  const writeStatus = await probe("git-receive-pack");
+  const read = { ok: readStatus === 200, status: readStatus };
+  const write = { ok: writeStatus === 200, status: writeStatus };
+
+  let summary: string;
+  if (read.ok && write.ok) {
+    summary = "Доступ есть: чтение и запись работают.";
+  } else if (read.ok && !write.ok) {
+    summary =
+      `Чтение работает, запись — нет (${write.status}). У токена не хватает права ` +
+      "Permissions → Contents → Read and write.";
+  } else if (readStatus === 401 || writeStatus === 401) {
+    summary = "GitHub не принял токен (401). Скорее всего он истёк или скопирован не полностью.";
+  } else if (readStatus === 404) {
+    summary =
+      "Репозиторий не найден (404). Проверьте адрес и что токен выпущен именно на этот репозиторий.";
+  } else {
+    summary = `Нет доступа: чтение ${read.status}, запись ${write.status}.`;
+  }
+  return { read, write, summary };
 }
