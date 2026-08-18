@@ -112,18 +112,56 @@ export async function ensureRepoSkeleton(): Promise<void> {
  * в редактор карточки в собранном приложении это делает), запись файла остаётся,
  * а запись «такой файл существует» пропадает — карточка выглядит потерянной.
  */
+/**
+ * Отладочный доступ к хранилищу — только в режиме разработки.
+ * Нужен, чтобы измерять поведение записи, а не рассуждать о нём.
+ */
+export function exposeFsDebug(): void {
+  if (typeof window === "undefined" || process.env.NODE_ENV !== "development") return;
+  const pfs = getPfs();
+  (window as unknown as { __fsDebug?: unknown }).__fsDebug = {
+    fsKeys: () => Object.keys(getFS() as unknown as Record<string, unknown>),
+    fsShape: () => {
+      const fs = getFS() as unknown as Record<string, unknown>;
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(fs)) out[k] = Object.prototype.toString.call(v);
+      return out;
+    },
+    backend: () => (getFS() as unknown as { _backend?: unknown })._backend,
+    hasFlush: () => typeof (getPfs() as unknown as { flush?: unknown }).flush === "function",
+    async writeMany(dir: string, count: number, sizeKb: number, flush: boolean) {
+      await ensureDir(dir);
+      const chunk = new Uint8Array(sizeKb * 1024).fill(7);
+      for (let i = 0; i < count; i++) {
+        await pfs.writeFile(`${dir}/f${i}.bin`, chunk);
+      }
+      if (flush) await flushFs();
+      return { written: count, flushed: flush };
+    },
+    async count(dir: string) {
+      try {
+        return ((await pfs.readdir(dir)) as string[]).length;
+      } catch {
+        return -1;
+      }
+    },
+    async wipe(dir: string) {
+      await removePath(dir);
+      await flushFs();
+    },
+  };
+}
+
 export async function flushFs(): Promise<void> {
-  const backend = (getFS() as unknown as { _backend?: { flush?: () => Promise<void> } })._backend;
-  if (backend && typeof backend.flush === "function") {
-    try {
-      await backend.flush();
-      return;
-    } catch {
-      // падаем в запасной вариант ниже
-    }
+  const pfs = getPfs() as unknown as { flush?: () => Promise<void> };
+  if (typeof pfs.flush === "function") {
+    await pfs.flush();
+    return;
   }
-  // Запас поверх внутренней задержки в 500 мс, если внутренности изменились.
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  // Библиотека изменилась — ждём по времени, но говорим об этом вслух,
+  // потому что молчаливая деградация уже однажды стоила потерянных данных.
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  console.warn("flushFs: метод flush недоступен, использован запас по времени");
 }
 
 export async function bytesToDataUrl(bytes: Uint8Array, mime: string): Promise<string> {
