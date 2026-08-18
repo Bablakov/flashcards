@@ -7,6 +7,14 @@ import { getFS, REPO_ROOT, ensureRepoSkeleton, exists } from "./fs";
 import { GitConfig } from "./types";
 import { loadSyncStatus, saveSyncStatus } from "./settings";
 import { flashcardsMergeDriver } from "./merge";
+import { invalidateReady } from "./migrate";
+import { invalidateRepositoryCache } from "./repository";
+
+/** После clone/pull содержимое на диске изменилось: сбрасываем кэши и повторяем проверку формата. */
+function repoContentChanged() {
+  invalidateReady();
+  invalidateRepositoryCache();
+}
 
 if (typeof window !== "undefined" && !(window as unknown as { Buffer?: unknown }).Buffer) {
   (window as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
@@ -55,6 +63,7 @@ export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void):
     onAuth: () => authFor(cfg) ?? {},
     onMessage: (m) => onProgress?.(m),
   });
+  repoContentChanged();
   onProgress?.("Готово");
 }
 
@@ -138,6 +147,7 @@ export async function pull(cfg: GitConfig, onProgress?: (m: string) => void): Pr
     onMessage: (m: string) => onProgress?.(m),
   };
   await git.pull(opts as unknown as Parameters<typeof git.pull>[0]);
+  repoContentChanged();
 }
 
 export async function push(cfg: GitConfig, onProgress?: (m: string) => void): Promise<void> {

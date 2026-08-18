@@ -110,6 +110,51 @@ function mergeDeckNewest(baseStr: string, ourStr: string, theirStr: string): str
   return JSON.stringify(winner, null, 2);
 }
 
+/**
+ * Журнал прогресса: файлы `journal/<устройство>/<месяц>.jsonl` только дописываются,
+ * поэтому корректное слияние — объединение строк без потерь. Штатно конфликта
+ * не бывает (у каждого устройства свой файл), но если он всё же случился —
+ * ни одна строка не должна пропасть.
+ */
+function mergeJsonl(ourStr: string, theirStr: string): string {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const chunk of [ourStr, theirStr]) {
+    for (const raw of chunk.split("\n")) {
+      const line = raw.trim();
+      if (!line || seen.has(line)) continue;
+      seen.add(line);
+      lines.push(line);
+    }
+  }
+  lines.sort((a, b) => {
+    const ta = /"t"\s*:\s*"([^"]+)"/.exec(a)?.[1] ?? "";
+    const tb = /"t"\s*:\s*"([^"]+)"/.exec(b)?.[1] ?? "";
+    return ta.localeCompare(tb) || a.localeCompare(b);
+  });
+  return `${lines.join("\n")}\n`;
+}
+
+/** meta.json: побеждает более высокая версия формата, иначе — более свежая запись. */
+function mergeMeta(ourStr: string, theirStr: string): string {
+  let ours: Record<string, unknown> = {};
+  let theirs: Record<string, unknown> = {};
+  try {
+    ours = JSON.parse(ourStr);
+  } catch {
+    return theirStr || ourStr;
+  }
+  try {
+    theirs = JSON.parse(theirStr);
+  } catch {
+    return ourStr;
+  }
+  const ov = Number(ours.formatVersion ?? 0);
+  const tv = Number(theirs.formatVersion ?? 0);
+  if (tv !== ov) return JSON.stringify(tv > ov ? theirs : ours, null, 2);
+  return JSON.stringify(ts(theirs as AnyDeck) > ts(ours as AnyDeck) ? theirs : ours, null, 2);
+}
+
 export interface MergeDriverArgs {
   branches: string[];
   contents: string[]; // [base, ours, theirs]
@@ -129,6 +174,24 @@ export function flashcardsMergeDriver({ contents, path }: MergeDriverArgs): Merg
   const ours = contents[1] ?? "";
   const theirs = contents[2] ?? "";
 
+  // Формат 2: файл на объект — конфликт возможен только при правке ОДНОГО объекта
+  // на двух устройствах, побеждает более свежий updatedAt.
+  if (path.endsWith(".jsonl")) {
+    return { mergedText: mergeJsonl(ours, theirs), cleanMerge: true };
+  }
+  if (path === "meta.json" || path.endsWith("/meta.json")) {
+    return { mergedText: mergeMeta(ours, theirs), cleanMerge: true };
+  }
+  if (
+    path.startsWith("cards/") ||
+    path.startsWith("groups/") ||
+    path === "settings.json" ||
+    path.endsWith("/settings.json")
+  ) {
+    return { mergedText: mergeDeckNewest(base, ours, theirs), cleanMerge: true };
+  }
+
+  // Формат 1 (репозитории до миграции): массив карточек в одном файле.
   if (path.endsWith("cards.json")) {
     const merged = mergeCardArrays(parseCards(base), parseCards(ours), parseCards(theirs));
     return { mergedText: JSON.stringify(merged, null, 2), cleanMerge: true };

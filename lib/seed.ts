@@ -1,7 +1,13 @@
 "use client";
 
-import { Card, CardSchema, Deck, DeckSchema } from "./types";
-import { ensureDir, ensureRepoSkeleton, writeJson, listDir } from "./fs";
+/**
+ * Демо-данные для первого запуска. Файлы в public/seed-data остались в старом
+ * (плоском) виде, поэтому здесь они читаются как есть и раскладываются уже
+ * через репозиторий — то есть сразу в формате 2 (группы + карточки + журнал).
+ */
+
+import { CardSchema, DeckSchema } from "./types";
+import { addCard, createDeck, listDeckIds, updateCard } from "./repository";
 
 const FLAG_KEY = "flashcards.seed.installed";
 
@@ -24,9 +30,8 @@ export async function maybeInstallSeed(): Promise<{ installed: boolean; count: n
   if (typeof window === "undefined") return { installed: false, count: 0 };
   if (await isSeedInstalled()) return { installed: false, count: 0 };
 
-  await ensureRepoSkeleton();
-  const existing = await listDir("/repo/decks");
-  if (existing.length > 0) {
+  // Если группы уже есть (например, репозиторий склонирован) — ничего не подкладываем.
+  if ((await listDeckIds()).length > 0) {
     markSeedInstalled();
     return { installed: false, count: 0 };
   }
@@ -49,22 +54,46 @@ export async function maybeInstallSeed(): Promise<{ installed: boolean; count: n
         fetch(`./seed-data/decks/${deckId}/cards.json`, { cache: "no-store" }),
       ]);
       if (!deckRes.ok || !cardsRes.ok) continue;
-      const deckJson = (await deckRes.json()) as unknown;
-      const cardsJson = (await cardsRes.json()) as unknown;
 
-      const deck: Deck = DeckSchema.parse(deckJson);
-      const cards: Card[] = Array.isArray(cardsJson)
-        ? (cardsJson as unknown[]).map((c) => CardSchema.parse(c))
+      const deck = DeckSchema.parse(await deckRes.json());
+      const rawCards = await cardsRes.json();
+      const cards = Array.isArray(rawCards)
+        ? (rawCards as unknown[]).flatMap((c) => {
+            try {
+              return [CardSchema.parse(c)];
+            } catch {
+              return [];
+            }
+          })
         : [];
 
-      const dir = `/repo/decks/${deck.id}`;
-      await ensureDir(dir);
-      await ensureDir(`${dir}/media`);
-      await writeJson(`${dir}/deck.json`, deck);
-      await writeJson(`${dir}/cards.json`, cards);
+      const group = await createDeck({
+        name: deck.name,
+        color: deck.color,
+        description: deck.description,
+        frontLanguage: deck.settings.frontLanguage,
+        backLanguage: deck.settings.backLanguage,
+      });
+
+      for (const card of cards) {
+        const created = await addCard(
+          group.id,
+          { text: card.front.text },
+          { text: card.back.text },
+        );
+        if (card.box > 1 || card.reviewCount > 0 || card.tags.length > 0) {
+          await updateCard(group.id, created.id, {
+            tags: card.tags,
+            box: card.box,
+            goodCount: card.goodCount,
+            badCount: card.badCount,
+            reviewCount: card.reviewCount,
+          });
+        }
+      }
       count++;
     } catch {
-      // skip malformed deck
+      // повреждённая демо-колода не должна ломать первый запуск
     }
   }
 

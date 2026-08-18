@@ -15,8 +15,8 @@ import {
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Box, Card, Deck, Rating, StudyMode, languageInfo } from "@/lib/types";
-import { getCards, getDeck, updateCard, loadMediaDataUrl } from "@/lib/repository";
-import { applyRating, BOX_COLORS, BOX_LABEL, selectStudyDeck } from "@/lib/srs";
+import { getCards, getDeck, rateCard, loadMediaDataUrl } from "@/lib/repository";
+import { BOX_COLORS, BOX_LABEL, selectStudyDeck } from "@/lib/srs";
 
 type Order = "random" | "sequential";
 
@@ -349,8 +349,9 @@ function StudySession({
 
   async function rate(rating: Rating) {
     if (!card) return;
-    const updated = applyRating(card, rating);
-    await updateCard(deckId, card.id, updated);
+    // Ответ пишется событием в журнал (lib/progress.ts), файл карточки не трогается —
+    // поэтому прохождение на двух устройствах никогда не конфликтует в git.
+    await rateCard(card.id, rating);
     const newStats = { ...stats };
     if (rating === "good") newStats.good += 1;
     else if (rating === "neutral") newStats.neutral += 1;

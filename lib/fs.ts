@@ -96,9 +96,12 @@ export async function removePath(path: string): Promise<void> {
   }
 }
 
+/**
+ * Каталог `decks/` относится к формату 1 и больше не создаётся: структуру формата 2
+ * готовит store.ensureSkeleton(), а `DECKS_DIR` остаётся только для миграции.
+ */
 export async function ensureRepoSkeleton(): Promise<void> {
   await ensureDir(REPO_ROOT);
-  await ensureDir(DECKS_DIR);
 }
 
 export async function bytesToDataUrl(bytes: Uint8Array, mime: string): Promise<string> {
