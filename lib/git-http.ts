@@ -6,8 +6,11 @@
  *  - ПК (Electron): запрос уходит по IPC в главный процесс и выполняется обычным
  *    сетевым стеком Node. Браузерного CORS там нет — сторонний прокси не нужен,
  *    токен не покидает устройство;
- *  - Android (Capacitor): нативный HTTP-плагин патчит fetch, запрос тоже идёт
- *    мимо CORS;
+ *  - Android (Capacitor): запрос уходит через нативный HTTP-плагин ЯВНЫМ вызовом.
+ *    Глобальный патч fetch для этого не годится: нативный слой принимает только
+ *    строку или JSON, а git гоняет двоичные пакеты — их нужно передавать base64
+ *    с `dataType: "file"`. Плюс патч перехватывал вообще все запросы приложения
+ *    и ломал загрузку страниц;
  *  - обычный браузер: штатный веб-клиент isomorphic-git. Здесь CORS никуда не
  *    девается, поэтому нужен свой прокси (поле в настройках).
  */
@@ -30,6 +33,26 @@ interface DesktopBridge {
     headers: Record<string, string>;
     body: Uint8Array;
   }>;
+}
+
+/* ------------------------------------------------------ base64 <-> байты */
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunk = 0x8000; // посимвольный вызов на больших пакетах переполняет стек
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  if (!base64) return new Uint8Array(0);
+  const clean = base64.includes(",") ? base64.split(",")[1] : base64;
+  const binary = atob(clean);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
 }
 
 function desktop(): DesktopBridge | null {
@@ -87,10 +110,58 @@ async function collectBody(body: GitHttpRequest["body"]): Promise<Uint8Array | u
   return out;
 }
 
+let nativeChecked = false;
+let isNative = false;
+
+/** Capacitor есть только в APK; в браузере и в ПК-сборке ветка не используется. */
+async function nativePlatform(): Promise<boolean> {
+  if (nativeChecked) return isNative;
+  nativeChecked = true;
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    isNative = Capacitor.isNativePlatform();
+  } catch {
+    isNative = false;
+  }
+  return isNative;
+}
+
+/**
+ * Android: явный вызов нативного HTTP. Тело запроса уходит base64 с
+ * `dataType: "file"` (иначе двоичный пакет git испортится при конвертации
+ * в строку), ответ забираем как arraybuffer — плагин отдаёт его тоже base64.
+ */
+async function nativeRequest(req: GitHttpRequest): Promise<GitHttpResponse> {
+  const { CapacitorHttp } = await import("@capacitor/core");
+  const bodyBytes = await collectBody(req.body);
+  const res = await CapacitorHttp.request({
+    url: req.url,
+    method: req.method ?? "GET",
+    headers: (req.headers ?? {}) as Record<string, string>,
+    responseType: "arraybuffer",
+    connectTimeout: 30_000,
+    readTimeout: NETWORK_TIMEOUT_MS,
+    ...(bodyBytes ? { data: bytesToBase64(bodyBytes), dataType: "file" as const } : {}),
+  });
+  const headers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(res.headers ?? {})) headers[k.toLowerCase()] = String(v);
+  return {
+    url: res.url || req.url,
+    method: req.method ?? "GET",
+    statusCode: res.status,
+    statusMessage: String(res.status),
+    headers,
+    body: single(base64ToBytes(typeof res.data === "string" ? res.data : "")),
+  };
+}
+
 export const gitHttp: HttpClient = {
   async request(req: GitHttpRequest): Promise<GitHttpResponse> {
     const bridge = desktop();
     if (!bridge) {
+      if (await nativePlatform()) {
+        return await withTimeout(nativeRequest(req), req.url);
+      }
       return await withTimeout((webHttp as HttpClient).request(req), req.url);
     }
     const body = await collectBody(req.body);

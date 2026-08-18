@@ -26,6 +26,9 @@ let journalTimer: ReturnType<typeof setTimeout> | null = null;
 let commitQueue: string[] = [];
 let journalPending = false;
 let running = false;
+// Одновременно идущие синхронизации на телефоне съедают память и подвешивают
+// интерфейс: запуск при старте, после правки и по кнопке легко накладываются.
+let syncing = false;
 let pendingListeners: ((count: number) => void)[] = [];
 
 function gitConfigured(): boolean {
@@ -118,25 +121,38 @@ export async function commitNow(): Promise<void> {
 }
 
 async function pushNow(): Promise<void> {
-  if (!gitConfigured()) return;
+  if (!gitConfigured() || syncing) return;
+  syncing = true;
   try {
     const { syncAll } = await import("./git");
     await syncAll(loadGitConfig(), "Sync flashcards");
     void notifyPending();
   } catch {
     // нет сети — изменения останутся в локальных коммитах и уйдут позже
+  } finally {
+    syncing = false;
   }
 }
 
 /** Ручная синхронизация («Синхронизировать сейчас»). */
 export async function syncNow(onProgress?: (m: string) => void): Promise<void> {
-  await flushJournal();
-  await commitNow();
+  if (syncing) throw new Error("Синхронизация уже идёт — дождитесь её завершения");
   const cfg = loadGitConfig();
   if (!cfg.remoteUrl) throw new Error("Не задан адрес репозитория в настройках");
-  const { syncAll } = await import("./git");
-  await syncAll(cfg, "Sync flashcards", onProgress);
-  void notifyPending();
+  syncing = true;
+  try {
+    await flushJournal();
+    await commitNow();
+    const { syncAll } = await import("./git");
+    await syncAll(cfg, "Sync flashcards", onProgress);
+    void notifyPending();
+  } finally {
+    syncing = false;
+  }
+}
+
+export function isSyncing(): boolean {
+  return syncing;
 }
 
 /* --------------------------------------------------- расписание запуска */
