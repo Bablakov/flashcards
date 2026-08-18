@@ -2,24 +2,14 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2, Volume2 } from "lucide-react";
+import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Box, Card, Deck, languageInfo } from "@/lib/types";
-import {
-  addCard,
-  deleteCard,
-  getCards,
-  getDeck,
-  loadMediaDataUrl,
-  saveMedia,
-  updateCard,
-} from "@/lib/repository";
-import { fileToBytes, mimeToExt } from "@/lib/media";
+import { addCard, deleteCard, getCards, getDeck, saveMedia, updateCard } from "@/lib/repository";
+import { fileToBytes } from "@/lib/media";
 import { ImageInput } from "@/components/ImageInput";
-import { AudioRecorderButton } from "@/components/AudioRecorderButton";
 import { toast } from "@/components/Toaster";
 import { BOX_COLORS, BOX_LABEL } from "@/lib/srs";
-import { speak } from "@/lib/tts";
 
 export default function CardEditorWrapper() {
   return (
@@ -64,35 +54,10 @@ function CardEditor() {
     if (updated) setCard(updated);
   }
 
-  async function handleAudioPicked(side: "front" | "back", blob: Blob, mime: string) {
-    if (!card) return;
-    const buf = await blob.arrayBuffer();
-    const path = await saveMedia(
-      deckId,
-      card.id,
-      side,
-      "audio",
-      new Uint8Array(buf),
-      mimeToExt(mime),
-    );
-    const updated = await updateCard(deckId, card.id, {
-      [side]: { ...card[side], audio: path },
-    } as Partial<Card>);
-    if (updated) setCard(updated);
-  }
-
   async function handleClearImage(side: "front" | "back") {
     if (!card) return;
     const updated = await updateCard(deckId, card.id, {
       [side]: { ...card[side], image: null },
-    } as Partial<Card>);
-    if (updated) setCard(updated);
-  }
-
-  async function handleClearAudio(side: "front" | "back") {
-    if (!card) return;
-    const updated = await updateCard(deckId, card.id, {
-      [side]: { ...card[side], audio: null },
     } as Partial<Card>);
     if (updated) setCard(updated);
   }
@@ -181,12 +146,9 @@ function CardEditor() {
           deckId={deckId}
           card={card}
           side="front"
-          deck={deck}
           onTextChange={(text) => setCard({ ...card, front: { ...card.front, text } })}
           onImagePicked={(f) => handleImagePicked("front", f)}
-          onAudioPicked={(b, m) => handleAudioPicked("front", b, m)}
           onClearImage={() => handleClearImage("front")}
-          onClearAudio={() => handleClearAudio("front")}
         />
         <Side
           title="Обратная сторона"
@@ -194,12 +156,9 @@ function CardEditor() {
           deckId={deckId}
           card={card}
           side="back"
-          deck={deck}
           onTextChange={(text) => setCard({ ...card, back: { ...card.back, text } })}
           onImagePicked={(f) => handleImagePicked("back", f)}
-          onAudioPicked={(b, m) => handleAudioPicked("back", b, m)}
           onClearImage={() => handleClearImage("back")}
-          onClearAudio={() => handleClearAudio("back")}
         />
 
         <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
@@ -270,13 +229,10 @@ interface SideProps {
   lang: { code: string; name: string; flag: string } | null;
   deckId: string;
   card: Card;
-  deck: Deck | null;
   side: "front" | "back";
   onTextChange: (s: string) => void;
   onImagePicked: (f: File) => void;
-  onAudioPicked: (b: Blob, m: string) => void;
   onClearImage: () => void;
-  onClearAudio: () => void;
 }
 
 function Side({
@@ -284,37 +240,12 @@ function Side({
   lang,
   deckId,
   card,
-  deck,
   side,
   onTextChange,
   onImagePicked,
-  onAudioPicked,
   onClearImage,
-  onClearAudio,
 }: SideProps) {
   const data = card[side];
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      if (!data.audio) {
-        setAudioUrl(null);
-        return;
-      }
-      const url = await loadMediaDataUrl(deckId, data.audio);
-      if (mounted) setAudioUrl(url);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [deckId, data.audio]);
-
-  function trySpeak() {
-    if (!data.text.trim() || !deck) return;
-    const langCode = side === "front" ? deck.settings.frontLanguage : deck.settings.backLanguage;
-    const rate = side === "front" ? deck.settings.frontSpeechSpeed : deck.settings.backSpeechSpeed;
-    speak(data.text, langCode, rate);
-  }
 
   return (
     <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
@@ -326,24 +257,13 @@ function Side({
           </span>
         )}
       </div>
-      <div className="relative">
-        <textarea
-          value={data.text}
-          onChange={(e) => onTextChange(e.target.value)}
-          rows={4}
-          className="field min-h-[120px] resize-y pr-12"
-          placeholder="Текст..."
-        />
-        <button
-          type="button"
-          onClick={trySpeak}
-          className="absolute right-2 top-2 icon-btn h-9 w-9"
-          aria-label="Озвучить"
-          title="Озвучить"
-        >
-          <Volume2 size={16} />
-        </button>
-      </div>
+      <textarea
+        value={data.text}
+        onChange={(e) => onTextChange(e.target.value)}
+        rows={4}
+        className="field min-h-[120px] resize-y"
+        placeholder="Текст..."
+      />
       <ImageInput
         deckId={deckId}
         imagePath={data.image}
@@ -351,25 +271,6 @@ function Side({
         onCleared={onClearImage}
         label="Изображение"
       />
-      <div className="space-y-2">
-        <div className="text-sm font-medium text-text-secondary">Аудио</div>
-        {audioUrl ? (
-          <div className="flex items-center gap-2 rounded-xl bg-bg-soft p-3 ring-1 ring-[var(--ring-base)]">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <audio controls src={audioUrl} className="flex-1" />
-            <button
-              type="button"
-              onClick={onClearAudio}
-              className="rounded-full p-2 text-red-500 hover:bg-red-500/10"
-              aria-label="Удалить аудио"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        ) : (
-          <AudioRecorderButton onRecorded={onAudioPicked} />
-        )}
-      </div>
     </section>
   );
 }

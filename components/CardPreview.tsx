@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Card } from "@/lib/types";
 import { loadMediaDataUrl } from "@/lib/repository";
-import { Image as ImageIcon, MoreHorizontal, Pencil, Trash2, Volume2 } from "lucide-react";
+import { Image as ImageIcon, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { BOX_COLORS, BOX_LABEL } from "@/lib/srs";
 
 interface CardPreviewProps {
@@ -17,7 +17,6 @@ interface CardPreviewProps {
 export function CardPreview({ deckId, card, onClick, onEdit, onDelete }: CardPreviewProps) {
   const data = card.front;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [hasAudio, setHasAudio] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,12 +29,11 @@ export function CardPreview({ deckId, card, onClick, onEdit, onDelete }: CardPre
       } else {
         setImageUrl(null);
       }
-      setHasAudio(!!data.audio);
     })();
     return () => {
       mounted = false;
     };
-  }, [deckId, data.image, data.audio]);
+  }, [deckId, data.image]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -76,7 +74,6 @@ export function CardPreview({ deckId, card, onClick, onEdit, onDelete }: CardPre
         </div>
         <div className="mt-auto flex items-center gap-2 pt-3 text-xs text-text-faint">
           {!!data.image && <ImageIcon size={14} />}
-          {hasAudio && <Volume2 size={14} />}
           <span
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
             style={{ backgroundColor: BOX_COLORS[card.box] }}

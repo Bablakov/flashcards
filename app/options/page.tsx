@@ -8,7 +8,6 @@ import { Box, Deck, DeckSettings, DeckSettingsSchema, LANGUAGES } from "@/lib/ty
 import { getDeck, setDeckSettings } from "@/lib/repository";
 import { toast } from "@/components/Toaster";
 import { BOX_COLORS, BOX_LABEL } from "@/lib/srs";
-import { speak } from "@/lib/tts";
 
 export default function OptionsWrapper() {
   return (
@@ -42,13 +41,6 @@ function DeckOptionsPage() {
     toast("Сохранено", "success");
   }
 
-  function tryFront() {
-    if (deck) speak("Hello, привет, hola, bonjour", s.frontLanguage, s.frontSpeechSpeed);
-  }
-  function tryBack() {
-    if (deck) speak("Hello, привет, hola, bonjour", s.backLanguage, s.backSpeechSpeed);
-  }
-
   function toggleBox(b: Box) {
     setStudyBoxes((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
   }
@@ -64,7 +56,7 @@ function DeckOptionsPage() {
       <TopBar back title="Опции колоды" rightSlot={<div className="w-10" />} />
       <main className="flex-1 space-y-4 px-4 pb-16 pt-2">
         <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="mb-4 text-base font-semibold text-text-primary">Озвучка (TTS)</div>
+          <div className="mb-4 text-base font-semibold text-text-primary">Языки сторон</div>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Язык лицевой">
@@ -94,34 +86,6 @@ function DeckOptionsPage() {
                 </select>
               </Field>
             </div>
-            <Slider
-              label={`Скорость лицевой: ${s.frontSpeechSpeed.toFixed(2)}x`}
-              value={s.frontSpeechSpeed}
-              min={0.5}
-              max={2}
-              step={0.05}
-              onChange={(v) => setS((x) => ({ ...x, frontSpeechSpeed: v }))}
-              onTry={tryFront}
-            />
-            <Slider
-              label={`Скорость обратной: ${s.backSpeechSpeed.toFixed(2)}x`}
-              value={s.backSpeechSpeed}
-              min={0.5}
-              max={2}
-              step={0.05}
-              onChange={(v) => setS((x) => ({ ...x, backSpeechSpeed: v }))}
-              onTry={tryBack}
-            />
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-bg-soft px-4 py-3 ring-1 ring-[var(--ring-base)]">
-              <input
-                type="checkbox"
-                checked={s.autoSpeak}
-                onChange={(e) => setS((x) => ({ ...x, autoSpeak: e.target.checked }))}
-              />
-              <span className="text-sm text-text-secondary">
-                Автоматически озвучивать карточку при показе и переворте
-              </span>
-            </label>
           </div>
         </section>
 
@@ -202,46 +166,6 @@ function DeckOptionsPage() {
         )}
       </main>
     </>
-  );
-}
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  onTry,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (n: number) => void;
-  onTry?: () => void;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-sm text-text-secondary">
-        <span>{label}</span>
-        {onTry && (
-          <button onClick={onTry} className="text-xs text-[var(--accent)] hover:underline">
-            проверить
-          </button>
-        )}
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
-      />
-    </div>
   );
 }
 

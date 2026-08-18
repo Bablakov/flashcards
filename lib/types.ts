@@ -19,6 +19,10 @@ export type Box = z.infer<typeof BoxSchema>;
 export const CardSideSchema = z.object({
   text: z.string().default(""),
   image: z.string().nullable().default(null),
+  /**
+   * Голосовые функции удалены (решение 2026-08-18), но поле сохранено:
+   * старые карточки не должны терять ссылку на медиа до миграции формата 1→2.
+   */
   audio: z.string().nullable().default(null),
 });
 export type CardSide = z.infer<typeof CardSideSchema>;
@@ -52,11 +56,8 @@ export type Card = z.infer<typeof RawCardSchema>;
 export const DeckSettingsSchema = z.object({
   frontLanguage: z.string().default("ru"),
   backLanguage: z.string().default("en"),
-  frontSpeechSpeed: z.number().min(0.5).max(2).default(1),
-  backSpeechSpeed: z.number().min(0.5).max(2).default(1),
   flipDelay: z.number().min(0).default(0),
   nextDelay: z.number().min(0).default(0),
-  autoSpeak: z.boolean().default(false),
 });
 export type DeckSettings = z.infer<typeof DeckSettingsSchema>;
 

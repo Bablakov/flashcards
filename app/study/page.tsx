@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Volume2,
   RotateCcw,
   Check,
   X,
@@ -18,7 +17,6 @@ import { TopBar } from "@/components/TopBar";
 import { Box, Card, Deck, Rating, StudyMode, languageInfo } from "@/lib/types";
 import { getCards, getDeck, updateCard, loadMediaDataUrl } from "@/lib/repository";
 import { applyRating, BOX_COLORS, BOX_LABEL, selectStudyDeck } from "@/lib/srs";
-import { speak, stopSpeak } from "@/lib/tts";
 
 type Order = "random" | "sequential";
 
@@ -330,18 +328,6 @@ function StudySession({
     };
   }, [card, deckId]);
 
-  useEffect(() => {
-    if (!deck || !card) return;
-    if (!deck.settings.autoSpeak) return;
-    const side = flipped ? card.back : card.front;
-    if (!side.text.trim()) return;
-    const lang = flipped ? deck.settings.backLanguage : deck.settings.frontLanguage;
-    const rate = flipped ? deck.settings.backSpeechSpeed : deck.settings.frontSpeechSpeed;
-    speak(side.text, lang, rate);
-  }, [flipped, card, deck]);
-
-  useEffect(() => () => stopSpeak(), []);
-
   const swipeStart = useRef<{ x: number; y: number; t: number } | null>(null);
 
   function onPointerDown(e: React.PointerEvent) {
@@ -377,14 +363,6 @@ function StudySession({
       setIdx((i) => i + 1);
       setFlipped(false);
     }
-  }
-
-  function manualSpeak() {
-    if (!card || !deck) return;
-    const side = flipped ? card.back : card.front;
-    const lang = flipped ? deck.settings.backLanguage : deck.settings.frontLanguage;
-    const rate = flipped ? deck.settings.backSpeechSpeed : deck.settings.frontSpeechSpeed;
-    speak(side.text, lang, rate);
   }
 
   function gotoSetup() {
@@ -499,25 +477,17 @@ function StudySession({
             <CardFace
               text={card.front.text}
               imageUrl={imageFront}
-              hasAudio={!!card.front.audio}
               accent={deck.color}
               hint="свайп / тап → переворот"
             />
             <CardFace
               text={card.back.text}
               imageUrl={imageBack}
-              hasAudio={!!card.back.audio}
               accent={deck.color}
               back
               hint="оцени, как запомнил"
             />
           </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-center">
-          <button onClick={manualSpeak} className="pill-button">
-            <Volume2 size={16} /> Озвучить
-          </button>
         </div>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
@@ -548,14 +518,12 @@ function StudySession({
 function CardFace({
   text,
   imageUrl,
-  hasAudio,
   accent,
   back,
   hint,
 }: {
   text: string;
   imageUrl: string | null;
-  hasAudio: boolean;
   accent: string;
   back?: boolean;
   hint?: string;
@@ -576,8 +544,7 @@ function CardFace({
           {text || <span className="text-text-faint">пусто</span>}
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between text-[11px] text-text-faint">
-        <span>{hasAudio ? "🔊 есть аудио" : ""}</span>
+      <div className="mt-3 flex items-center justify-end text-[11px] text-text-faint">
         <span>{hint}</span>
       </div>
     </div>
