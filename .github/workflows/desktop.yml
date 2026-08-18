@@ -8,6 +8,11 @@ on:
   release:
     types: [published]
 
+# Токен сборки по умолчанию только на чтение — для публикации релиза
+# нужны права на запись содержимого репозитория.
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
