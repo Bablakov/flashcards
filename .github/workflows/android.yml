@@ -49,6 +49,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      # Иконка и splash из assets/icon.png (сгенерированы из public/icon-512.svg)
+      - name: Generate Android icons
+        run: npx --yes @capacitor/assets generate --android --assetPath assets
+        continue-on-error: true
+
       # Подпись обязательна для обновления поверх: APK с другим ключом Android
       # ставить откажется. Ключ хранится в секретах и в личном бэкапе.
       - name: Restore keystore

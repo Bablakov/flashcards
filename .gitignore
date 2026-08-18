@@ -15,3 +15,6 @@ documentation/
 
 # Скачанные из CI артефакты сборки (APK)
 artifacts/
+
+# Сборка ПК-приложения
+dist-desktop/
