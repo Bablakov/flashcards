@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, RefreshCcw, Search, Upload } from "lucide-react";
+import { BarChart3, Plus, RefreshCcw, Search, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { DeckSummary } from "@/lib/types";
@@ -267,6 +267,11 @@ export default function HomePage() {
       <BottomActions>
         <ActionButton icon={<Plus size={22} />} label="Группа" onClick={openCreate} />
         <ActionButton icon={<Upload size={22} />} label="Импорт" onClick={handleImportDeck} />
+        <ActionButton
+          icon={<BarChart3 size={22} />}
+          label="Отчёт"
+          onClick={() => router.push("/report")}
+        />
         <ActionButton
           icon={<RefreshCcw size={22} className={busy ? "animate-spin" : ""} />}
           label={busy ? "Sync..." : "Синхр."}

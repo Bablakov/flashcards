@@ -13,6 +13,12 @@ import { useTheme } from "@/components/ThemeProvider";
 import { WeekScheduleEditor } from "@/components/WeekSchedule";
 import { AppSettings, AppSettingsSchema, WeekSchedule } from "@/lib/model";
 import { readSettings, writeSettings } from "@/lib/store";
+import {
+  enabledOnThisDevice,
+  rescheduleNotifications,
+  sendTestNotification,
+  setEnabledOnThisDevice,
+} from "@/lib/notifications";
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState<GitConfig>(() => GitConfigSchema.parse({}));
@@ -21,18 +27,26 @@ export default function SettingsPage() {
   const [pending, setPending] = useState(0);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [app, setApp] = useState<AppSettings>(() => AppSettingsSchema.parse({}));
+  const [deviceNotifications, setDeviceNotifications] = useState(true);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     setCfg(loadGitConfig());
     refresh();
     void readSettings().then(setApp);
+    setDeviceNotifications(enabledOnThisDevice());
   }, []);
 
   /** Настройки приложения лежат в репозитории и переезжают на второе устройство (§5.5). */
   async function updateApp(patch: Partial<AppSettings>) {
     const next = await writeSettings(patch);
     setApp(next);
+    if ("notifications" in patch) void rescheduleNotifications();
+  }
+
+  async function handleTestNotification() {
+    const ok = await sendTestNotification();
+    toast(ok ? "Тестовое уведомление отправлено" : "Уведомления запрещены в системе", ok ? "success" : "error");
   }
 
   async function refresh() {
@@ -231,6 +245,77 @@ export default function SettingsPage() {
         </section>
 
         <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="text-lg font-semibold text-text-primary">Обучение</div>
+          <p className="text-xs text-text-muted">
+            Лимиты защищают от завала после перерыва: после недельной паузы приложение не
+            вывалит все просроченные карточки сразу.
+          </p>
+          <NumberField
+            label="Новых карточек в день"
+            value={app.dailyNewLimit}
+            min={1}
+            max={200}
+            onChange={(v) => updateApp({ dailyNewLimit: v })}
+          />
+          <NumberField
+            label="Повторов в день"
+            value={app.dailyReviewLimit}
+            min={10}
+            max={1000}
+            onChange={(v) => updateApp({ dailyReviewLimit: v })}
+          />
+          <label className="block">
+            <div className="mb-1 flex items-center justify-between text-sm text-text-secondary">
+              <span>Целевая удерживаемость</span>
+              <span className="text-text-muted">{Math.round(app.retention * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0.85}
+              max={0.95}
+              step={0.01}
+              value={app.retention}
+              onChange={(e) => updateApp({ retention: Number(e.target.value) })}
+              className="w-full"
+            />
+            <p className="mt-1 text-xs text-text-faint">
+              Насколько уверенно нужно помнить материал. Выше — повторов больше, забывается меньше.
+            </p>
+          </label>
+          <SyncToggle
+            label="Строгий режим: не засчитывать прохождение без синхронизации"
+            checked={app.strictOffline}
+            onChange={(v) => updateApp({ strictOffline: v })}
+          />
+        </section>
+
+        <div className="mb-3">
+          <WeekScheduleEditor
+            title="Напоминания"
+            hint="Локальные уведомления без сервера: работают офлайн. На ПК приходят, пока приложение запущено (в трее), на телефоне — по системному расписанию."
+            value={app.notifications as WeekSchedule}
+            onChange={(v) => updateApp({ notifications: v })}
+          />
+        </div>
+
+        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <SyncToggle
+            label="Показывать уведомления на этом устройстве"
+            checked={deviceNotifications}
+            onChange={(v) => {
+              setDeviceNotifications(v);
+              setEnabledOnThisDevice(v);
+            }}
+          />
+          <p className="text-xs text-text-faint">
+            Расписание общее для всех устройств, а этот тумблер — только для текущего.
+          </p>
+          <button onClick={handleTestNotification} className="pill-button">
+            Проверить уведомление
+          </button>
+        </section>
+
+        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
           <div className="text-lg font-semibold text-text-primary">Когда синхронизировать</div>
           <p className="text-xs text-text-muted">
             Варианты комбинируются. Изменения коммитятся сразу и в офлайне — отправка просто
@@ -336,6 +421,34 @@ function SyncToggle({
         className="h-4 w-4 accent-[var(--accent)]"
       />
       <span className="text-sm text-text-secondary">{label}</span>
+    </label>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-3">
+      <span className="text-sm text-text-secondary">{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))}
+        className="field w-28 px-3 py-1.5 text-sm"
+      />
     </label>
   );
 }

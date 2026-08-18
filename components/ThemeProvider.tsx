@@ -59,6 +59,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Политика синхронизации (§7.2): запуск, расписание, выход. Ленивый импорт,
     // чтобы isomorphic-git не попадал в бандл каждой страницы.
     void import("@/lib/autosync").then((m) => m.startSyncScheduler());
+    void import("@/lib/notifications").then((m) => m.rescheduleNotifications());
   }, []);
 
   const setTheme = useCallback((t: Theme) => {
