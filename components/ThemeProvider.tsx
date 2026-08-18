@@ -56,6 +56,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Источник правды всё равно Git, но это снижает риск, что Android сотрёт локальную копию
     // до того, как изменения ушли в Git.
     void requestPersistentStorage();
+    // Политика синхронизации (§7.2): запуск, расписание, выход. Ленивый импорт,
+    // чтобы isomorphic-git не попадал в бандл каждой страницы.
+    void import("@/lib/autosync").then((m) => m.startSyncScheduler());
   }, []);
 
   const setTheme = useCallback((t: Theme) => {

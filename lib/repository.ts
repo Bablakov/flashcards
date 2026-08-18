@@ -13,7 +13,7 @@ import { nanoid } from "nanoid";
 import { Card, Deck, DeckSettings, DeckSettingsSchema, DeckSummary, Rating } from "./types";
 import { CardContent, Group, GroupSettings } from "./model";
 import type { StudyItem } from "./session";
-import { scheduleAutoSync } from "./autosync";
+import { recordChange, recordReview } from "./autosync";
 import { ensureReady } from "./migrate";
 import { bytesToDataUrl } from "./fs";
 import { getProgress, getProgressMap, invalidateProgress, EMPTY_PROGRESS } from "./progress";
@@ -78,6 +78,11 @@ function groupToDeck(group: Group, cardCount: number): Deck {
     createdAt: group.createdAt,
     updatedAt: group.updatedAt,
   };
+}
+
+function cardLabel(content: CardContent): string {
+  const text = (content.front.text || content.back.text || "без текста").trim();
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
 }
 
 function contentToCard(content: CardContent, progress = EMPTY_PROGRESS): Card {
@@ -184,7 +189,7 @@ export async function moveGroup(groupId: string, newParentId: string | null): Pr
   if (!group) return false;
   await writeGroup({ ...group, parentId: newParentId });
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`перенесена группа «${group.name}»`);
   return true;
 }
 
@@ -196,7 +201,7 @@ export async function moveCard(cardId: string, newGroupId: string): Promise<bool
   if (!content || !target) return false;
   await writeCard({ ...content, groupId: newGroupId });
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`карточка перенесена в «${target.name}»`);
   return true;
 }
 
@@ -238,7 +243,7 @@ export async function createDeck(
   };
   const saved = await writeGroup(group);
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`создана группа «${saved.name}»`);
   return groupToDeck(saved, 0);
 }
 
@@ -262,7 +267,7 @@ export async function updateDeck(
   };
   const saved = await writeGroup(next);
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`изменена группа «${saved.name}»`);
   return await getDeck(saved.id);
 }
 
@@ -299,7 +304,7 @@ export async function deleteDeck(deckId: string): Promise<void> {
     await writeCard({ ...card, deleted: true });
   }
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`удалена группа «${groups.find((g) => g.id === deckId)?.name ?? deckId}»`);
 }
 
 /* ----------------------------------------------------------- карточки --- */
@@ -358,7 +363,7 @@ export async function addCard(
   };
   const saved = await writeCard(content);
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`добавлена карточка → «${group.name}»`);
   return contentToCard(saved);
 }
 
@@ -416,7 +421,7 @@ export async function updateCard(
     invalidateProgress();
   }
 
-  scheduleAutoSync();
+  recordChange(`изменена карточка «${cardLabel(saved)}»`);
   return contentToCard(saved, await getProgress(cardId));
 }
 
@@ -429,7 +434,7 @@ export async function rateCard(cardId: string, rating: Rating): Promise<Card | n
     { k: "rate", t: nowIso(), card: cardId, group: content.groupId, rating },
   ]);
   invalidateProgress();
-  scheduleAutoSync();
+  recordReview();
   return contentToCard(content, await getProgress(cardId));
 }
 
@@ -439,7 +444,7 @@ export async function deleteCard(deckId: string, cardId: string): Promise<void> 
   if (!content) return;
   await writeCard({ ...content, deleted: true });
   invalidateCache();
-  scheduleAutoSync();
+  recordChange(`удалена карточка «${cardLabel(content)}»`);
 }
 
 /* -------------------------------------------------------------- медиа --- */
@@ -458,7 +463,6 @@ export async function saveMedia(
 ): Promise<string> {
   await ensureReady();
   const name = await saveMediaBytes(bytes, ext);
-  scheduleAutoSync();
   return name;
 }
 

@@ -363,8 +363,11 @@ function StudySession({
     // В тренировке и экзамене прогресс не трогаем — ответ не пишется в журнал.
     if (affectsProgress(mode)) await rateCard(item.card.id, rating);
     setStats((s) => ({ ...s, [rating]: s[rating] + 1 }));
-    if (idx + 1 >= queue.length) setDone(true);
-    else {
+    if (idx + 1 >= queue.length) {
+      setDone(true);
+      // Конец сессии — фиксируем накопленные ответы одним коммитом (§7.1).
+      void import("@/lib/autosync").then((m) => m.flushJournal());
+    } else {
       setIdx((i) => i + 1);
       setFlipped(false);
     }

@@ -19,8 +19,8 @@ import {
   type GroupOption,
 } from "@/lib/repository";
 import { toast } from "@/components/Toaster";
-import { syncAll, pendingChangesCount } from "@/lib/git";
-import { loadGitConfig } from "@/lib/settings";
+import { pendingChangesCount } from "@/lib/git";
+import { onPendingChange, syncNow } from "@/lib/autosync";
 import { maybeInstallSeed } from "@/lib/seed";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
 import { DeckCard } from "@/components/DeckCard";
@@ -80,6 +80,8 @@ export default function HomePage() {
       }
       await refresh();
     })();
+    // Индикатор «не синхронизировано» обновляется после каждого коммита (§7.1).
+    return onPendingChange(setPending);
   }, []);
 
   async function openCreate() {
@@ -151,12 +153,7 @@ export default function HomePage() {
   async function handleSync() {
     setBusy(true);
     try {
-      const cfg = loadGitConfig();
-      if (!cfg.remoteUrl) {
-        toast("Сначала настрой Git в /settings", "error");
-        return;
-      }
-      await syncAll(cfg, "Update from web", (m) => toast(m));
+      await syncNow((m) => toast(m));
       toast("Синхронизировано", "success");
       await refresh();
     } catch (e: unknown) {

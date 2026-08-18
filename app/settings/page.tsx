@@ -5,10 +5,14 @@ import { GitBranch, RefreshCcw, Trash2, Download, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { GitConfig, GitConfigSchema } from "@/lib/types";
 import { loadGitConfig, loadSyncStatus, saveGitConfig } from "@/lib/settings";
-import { syncAll, clone, isInitialized, pendingChangesCount } from "@/lib/git";
+import { clone, isInitialized, pendingChangesCount } from "@/lib/git";
+import { syncNow } from "@/lib/autosync";
 import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
 import { useTheme } from "@/components/ThemeProvider";
+import { WeekScheduleEditor } from "@/components/WeekSchedule";
+import { AppSettings, AppSettingsSchema, WeekSchedule } from "@/lib/model";
+import { readSettings, writeSettings } from "@/lib/store";
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState<GitConfig>(() => GitConfigSchema.parse({}));
@@ -16,12 +20,20 @@ export default function SettingsPage() {
   const [hasRepo, setHasRepo] = useState(false);
   const [pending, setPending] = useState(0);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [app, setApp] = useState<AppSettings>(() => AppSettingsSchema.parse({}));
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     setCfg(loadGitConfig());
     refresh();
+    void readSettings().then(setApp);
   }, []);
+
+  /** Настройки приложения лежат в репозитории и переезжают на второе устройство (§5.5). */
+  async function updateApp(patch: Partial<AppSettings>) {
+    const next = await writeSettings(patch);
+    setApp(next);
+  }
 
   async function refresh() {
     try {
@@ -60,7 +72,7 @@ export default function SettingsPage() {
     persist();
     setBusy(true);
     try {
-      await syncAll(cfg, "Update from web", (m) => toast(m));
+      await syncNow((m) => toast(m));
       toast("Готово", "success");
       await refresh();
     } catch (e: unknown) {
@@ -188,18 +200,6 @@ export default function SettingsPage() {
                 и вставь сюда URL. Пусто — синхронизация только нативным git с ПК.
               </p>
             </Field>
-            <label className="flex items-center gap-3 rounded-xl bg-bg-soft px-4 py-3 ring-1 ring-[var(--ring-base)]">
-              <input
-                type="checkbox"
-                checked={cfg.autoSync}
-                onChange={(e) => update("autoSync", e.target.checked)}
-                className="h-4 w-4 accent-[var(--accent)]"
-              />
-              <span className="text-sm text-text-secondary">
-                Авто-синхронизация — пушить изменения в Git автоматически (нужны URL, токен и
-                прокси)
-              </span>
-            </label>
           </div>
 
           <div className="flex flex-wrap gap-2 pt-2">
@@ -229,6 +229,38 @@ export default function SettingsPage() {
             <div>Последняя синхронизация: {lastSync ?? "—"}</div>
           </div>
         </section>
+
+        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="text-lg font-semibold text-text-primary">Когда синхронизировать</div>
+          <p className="text-xs text-text-muted">
+            Варианты комбинируются. Изменения коммитятся сразу и в офлайне — отправка просто
+            откладывается до сети. Настройки переезжают на второе устройство сами.
+          </p>
+          <SyncToggle
+            label="При запуске приложения"
+            checked={app.syncOnStart}
+            onChange={(v) => updateApp({ syncOnStart: v })}
+          />
+          <SyncToggle
+            label="После изменений (через 3 секунды тишины)"
+            checked={app.syncOnChange}
+            onChange={(v) => updateApp({ syncOnChange: v })}
+          />
+          <SyncToggle
+            label="При выходе и сворачивании"
+            checked={app.syncOnExit}
+            onChange={(v) => updateApp({ syncOnExit: v })}
+          />
+        </section>
+
+        <div className="mb-6">
+          <WeekScheduleEditor
+            title="Синхронизация по расписанию"
+            hint="Например, каждый день в 03:00 — приложение подтянет и отправит изменения само."
+            value={app.syncSchedule as WeekSchedule}
+            onChange={(v) => updateApp({ syncSchedule: v })}
+          />
+        </div>
 
         <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
           <div className="text-lg font-semibold text-text-primary">Опасная зона</div>
@@ -282,6 +314,28 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <label className="block">
       <div className="mb-1 text-sm font-medium text-text-secondary">{label}</div>
       {children}
+    </label>
+  );
+}
+
+function SyncToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-bg-soft px-4 py-3 ring-1 ring-[var(--ring-base)]">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-[var(--accent)]"
+      />
+      <span className="text-sm text-text-secondary">{label}</span>
     </label>
   );
 }
