@@ -64,12 +64,19 @@ jobs:
       # AndroidManifest генерируется Capacitor, поэтому дописываем его в CI.
       - name: Allow installing updates
         run: |
-          MANIFEST=android/app/src/main/AndroidManifest.xml
-          if ! grep -q REQUEST_INSTALL_PACKAGES "$MANIFEST"; then
-            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-</manifest>|' "$MANIFEST"
-          fi
-          grep -n "uses-permission" "$MANIFEST"
+          node -e "
+            const fs = require('fs');
+            const file = 'android/app/src/main/AndroidManifest.xml';
+            let xml = fs.readFileSync(file, 'utf8');
+            if (!xml.includes('REQUEST_INSTALL_PACKAGES')) {
+              xml = xml.replace(
+                '</manifest>',
+                '    <uses-permission android:name=\"android.permission.REQUEST_INSTALL_PACKAGES\" />\n</manifest>',
+              );
+              fs.writeFileSync(file, xml);
+            }
+          "
+          grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
 
       # versionCode обязан расти, иначе Android не поставит обновление поверх.
       - name: Set version
