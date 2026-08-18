@@ -3,7 +3,7 @@
 import * as git from "isomorphic-git";
 import { gitHttp, isDesktopApp } from "./git-http";
 import { Buffer } from "buffer";
-import { getFS, REPO_ROOT, ensureRepoSkeleton, exists, removePath } from "./fs";
+import { getFS, REPO_ROOT, ensureRepoSkeleton, exists, flushFs, removePath } from "./fs";
 import { GitConfig } from "./types";
 import { loadSyncStatus, saveSyncStatus } from "./settings";
 import { flashcardsMergeDriver } from "./merge";
@@ -87,6 +87,7 @@ export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void):
     onAuth: () => authFor(cfg) ?? {},
     onMessage: (m) => onProgress?.(m),
   });
+  await flushFs();
   repoContentChanged();
   onProgress?.("Готово");
 }
@@ -119,6 +120,10 @@ export async function stageAll(): Promise<{ added: number; modified: number; del
       modified++;
     }
   }
+  // Объекты git пишутся в то же хранилище с отложенной записью дерева.
+  // Без сброса перезагрузка страницы теряет их, и индекс начинает ссылаться
+  // на несуществующий объект — «Could not find <хеш>».
+  await flushFs();
   return { added, modified, deleted };
 }
 
@@ -131,6 +136,29 @@ export async function pendingChangesCount(): Promise<number> {
     if (head !== work || work !== stage) count++;
   }
   return count;
+}
+
+/**
+ * Повторно добавляет в индекс все файлы рабочего каталога.
+ *
+ * Нужно, когда индекс ссылается на объект, которого нет на диске
+ * («Could not find <хеш>»): git.add пересчитывает и записывает объект заново,
+ * поэтому потерянный файл-объект восстанавливается из содержимого, которое
+ * никуда не девалось.
+ */
+async function repairIndex(): Promise<void> {
+  const fs = fsRef();
+  const matrix = await git.statusMatrix({ fs, dir: REPO_ROOT });
+  for (const [filepath, , work] of matrix) {
+    if (filepath.startsWith(".git")) continue;
+    if (work === 0) continue;
+    try {
+      await git.add({ fs, dir: REPO_ROOT, filepath });
+    } catch {
+      // отдельный файл не должен мешать восстановлению остальных
+    }
+  }
+  await flushFs();
 }
 
 export async function commit(cfg: GitConfig, message: string): Promise<string | null> {
@@ -146,6 +174,7 @@ export async function commit(cfg: GitConfig, message: string): Promise<string | 
       email: cfg.email || "flashcards@local",
     },
   });
+  await flushFs();
   return sha;
 }
 
@@ -171,6 +200,7 @@ export async function pull(cfg: GitConfig, onProgress?: (m: string) => void): Pr
     onMessage: (m: string) => onProgress?.(m),
   };
   await git.pull(opts as unknown as Parameters<typeof git.pull>[0]);
+  await flushFs();
   repoContentChanged();
 }
 
@@ -219,6 +249,14 @@ export function explainGitError(e: unknown): string {
   }
   if (status === 404) {
     return "404: репозиторий не найден. Проверьте адрес (должен заканчиваться на .git) и что токен выпущен именно на него.";
+  }
+  if (/could not find [0-9a-f]{7,40}/i.test(raw)) {
+    return (
+      "Локальная копия репозитория повреждена: потерян служебный файл git. " +
+      "Данные в самом репозитории целы. Нажмите «Подключить и заменить данные» — " +
+      "локальная копия соберётся заново. Если на этом устройстве есть несохранённые " +
+      "карточки, сначала выгрузите их через Экспорт .fcdeck."
+    );
   }
   if (/would be overwritten by checkout|local changes/i.test(raw)) {
     return (
@@ -270,7 +308,16 @@ export async function syncAll(
     await configureIdentity(cfg);
 
     stage = "коммит";
-    committedSha = await commit(cfg, message);
+    try {
+      committedSha = await commit(cfg, message);
+    } catch (e: unknown) {
+      // Потерянный объект восстанавливаем сами и пробуем ещё раз — пользователю
+      // не за что тут отвечать.
+      if (!/could not find [0-9a-f]{7,40}/i.test((e as Error).message ?? "")) throw e;
+      onProgress?.("Восстанавливаем локальный индекс...");
+      await repairIndex();
+      committedSha = await commit(cfg, message);
+    }
 
     // Сначала pull с 3-way merge (наш mergeDriver сливает cards.json по id).
     // Только после успешного слияния пушим — иначе можно затереть чужие правки.
