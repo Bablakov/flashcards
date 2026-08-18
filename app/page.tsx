@@ -20,7 +20,7 @@ import {
 } from "@/lib/repository";
 import { toast } from "@/components/Toaster";
 import { pendingChangesCount } from "@/lib/git";
-import { onPendingChange, syncNow } from "@/lib/autosync";
+import { onPendingChange, onSyncStateChange, syncNow } from "@/lib/autosync";
 import { maybeInstallSeed } from "@/lib/seed";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
 import { DeckCard } from "@/components/DeckCard";
@@ -81,8 +81,14 @@ export default function HomePage() {
       }
       await refresh();
     })();
-    // Индикатор «не синхронизировано» обновляется после каждого коммита (§7.1).
-    return onPendingChange(setPending);
+    // Индикатор «не синхронизировано» обновляется после каждого коммита (§7.1),
+    // а «идёт синхронизация» гасит кнопку — в том числе при автоматической.
+    const offPending = onPendingChange(setPending);
+    const offSync = onSyncStateChange(setBusy);
+    return () => {
+      offPending();
+      offSync();
+    };
   }, []);
 
   async function openCreate() {
@@ -237,7 +243,14 @@ export default function HomePage() {
           </div>
         )}
 
-        {pending > 0 && (
+        {busy && (
+          <div className="mb-3 flex items-center gap-2 rounded-xl bg-[var(--accent)]/10 px-4 py-2 text-sm text-[var(--accent)]">
+            <RefreshCcw size={14} className="animate-spin" />
+            Синхронизация с GitHub...
+          </div>
+        )}
+
+        {!busy && pending > 0 && (
           <div className="mb-3 rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-600">
             Не синхронизировано: {pending} файлов
           </div>

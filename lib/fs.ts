@@ -104,6 +104,28 @@ export async function ensureRepoSkeleton(): Promise<void> {
   await ensureDir(REPO_ROOT);
 }
 
+/**
+ * Принудительная запись дерева файлов на диск.
+ *
+ * Хранилище пишет содержимое файла сразу, а само дерево каталогов — с задержкой
+ * в полсекунды. Если за это время страница успевает перезагрузиться (а переход
+ * в редактор карточки в собранном приложении это делает), запись файла остаётся,
+ * а запись «такой файл существует» пропадает — карточка выглядит потерянной.
+ */
+export async function flushFs(): Promise<void> {
+  const backend = (getFS() as unknown as { _backend?: { flush?: () => Promise<void> } })._backend;
+  if (backend && typeof backend.flush === "function") {
+    try {
+      await backend.flush();
+      return;
+    } catch {
+      // падаем в запасной вариант ниже
+    }
+  }
+  // Запас поверх внутренней задержки в 500 мс, если внутренности изменились.
+  await new Promise((resolve) => setTimeout(resolve, 600));
+}
+
 export async function bytesToDataUrl(bytes: Uint8Array, mime: string): Promise<string> {
   const blob = new Blob([new Uint8Array(bytes)], { type: mime });
   return await new Promise<string>((resolve, reject) => {

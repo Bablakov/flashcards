@@ -30,6 +30,21 @@ let running = false;
 // интерфейс: запуск при старте, после правки и по кнопке легко накладываются.
 let syncing = false;
 let pendingListeners: ((count: number) => void)[] = [];
+let syncListeners: ((busy: boolean) => void)[] = [];
+
+/** Подписка на «идёт синхронизация» — интерфейс гасит кнопки на это время. */
+export function onSyncStateChange(listener: (busy: boolean) => void): () => void {
+  syncListeners.push(listener);
+  listener(syncing);
+  return () => {
+    syncListeners = syncListeners.filter((l) => l !== listener);
+  };
+}
+
+function setSyncing(value: boolean): void {
+  syncing = value;
+  for (const listener of syncListeners) listener(value);
+}
 
 function gitConfigured(): boolean {
   const cfg = loadGitConfig();
@@ -122,7 +137,7 @@ export async function commitNow(): Promise<void> {
 
 async function pushNow(): Promise<void> {
   if (!gitConfigured() || syncing) return;
-  syncing = true;
+  setSyncing(true);
   try {
     const { syncAll } = await import("./git");
     await syncAll(loadGitConfig(), "Sync flashcards");
@@ -130,7 +145,7 @@ async function pushNow(): Promise<void> {
   } catch {
     // нет сети — изменения останутся в локальных коммитах и уйдут позже
   } finally {
-    syncing = false;
+    setSyncing(false);
   }
 }
 
@@ -139,7 +154,7 @@ export async function syncNow(onProgress?: (m: string) => void): Promise<void> {
   if (syncing) throw new Error("Синхронизация уже идёт — дождитесь её завершения");
   const cfg = loadGitConfig();
   if (!cfg.remoteUrl) throw new Error("Не задан адрес репозитория в настройках");
-  syncing = true;
+  setSyncing(true);
   try {
     await flushJournal();
     await commitNow();
@@ -147,7 +162,7 @@ export async function syncNow(onProgress?: (m: string) => void): Promise<void> {
     await syncAll(cfg, "Sync flashcards", onProgress);
     void notifyPending();
   } finally {
-    syncing = false;
+    setSyncing(false);
   }
 }
 

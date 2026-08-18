@@ -30,6 +30,7 @@ import {
   REPO_ROOT,
   ensureDir,
   exists,
+  flushFs,
   getPfs,
   listDir,
   readBytes,
@@ -74,6 +75,7 @@ export async function writeMeta(meta: Partial<RepoMeta>): Promise<RepoMeta> {
   const next = RepoMetaSchema.parse({ ...current, ...meta, updatedAt: nowIso() });
   await ensureDir(REPO_ROOT);
   await writeJson(META_FILE, next);
+  await flushFs();
   return next;
 }
 
@@ -134,6 +136,7 @@ export async function writeGroup(group: Group): Promise<Group> {
   await ensureDir(GROUPS_DIR);
   const next = GroupSchema.parse({ ...group, updatedAt: nowIso() });
   await writeJson(groupPath(next.id), next);
+  await flushFs();
   return next;
 }
 
@@ -227,6 +230,8 @@ export async function writeCard(card: CardContent): Promise<CardContent> {
   await ensureDir(CARDS_DIR);
   const next = CardContentSchema.parse({ ...card, updatedAt: nowIso() });
   await writeJson(cardPath(next.id), next);
+  // Без этого только что созданная карточка теряется при переходе в редактор.
+  await flushFs();
   return next;
 }
 
@@ -280,6 +285,7 @@ export async function saveMediaBytes(bytes: Uint8Array, ext: string): Promise<st
   const name = `${await hashBytes(bytes)}.${safeExt(ext, "webp")}`;
   if (!(await exists(`${MEDIA_DIR}/${name}`))) {
     await writeBytes(`${MEDIA_DIR}/${name}`, bytes);
+    await flushFs();
   }
   return name;
 }
@@ -421,5 +427,6 @@ export async function writeSettings(patch: Partial<AppSettings>): Promise<AppSet
   const next = AppSettingsSchema.parse({ ...current, ...patch, updatedAt: nowIso() });
   await ensureDir(REPO_ROOT);
   await writeJson(SETTINGS_FILE, next);
+  await flushFs();
   return next;
 }

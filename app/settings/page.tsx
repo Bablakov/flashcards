@@ -6,7 +6,7 @@ import { TopBar } from "@/components/TopBar";
 import { GitConfig, GitConfigSchema } from "@/lib/types";
 import { loadGitConfig, loadSyncStatus, saveGitConfig } from "@/lib/settings";
 import { checkAccess, cloneFresh, hasLocalData, isInitialized, pendingChangesCount } from "@/lib/git";
-import { syncNow } from "@/lib/autosync";
+import { onSyncStateChange, syncNow } from "@/lib/autosync";
 import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
 import { useTheme } from "@/components/ThemeProvider";
@@ -39,6 +39,8 @@ export default function SettingsPage() {
     refresh();
     void readSettings().then(setApp);
     setDeviceNotifications(enabledOnThisDevice());
+    // Пока идёт автоматическая синхронизация, кнопки гасим.
+    const offSync = onSyncStateChange(setBusy);
     const desktop = (window as unknown as {
       desktop?: { isDesktop: boolean; getAutoLaunch: () => Promise<boolean>; setAutoLaunch: (v: boolean) => Promise<boolean> };
     }).desktop;
@@ -46,6 +48,7 @@ export default function SettingsPage() {
       setIsDesktop(true);
       void desktop.getAutoLaunch().then(setAutoLaunch);
     }
+    return offSync;
   }, []);
 
   /** Настройки приложения лежат в репозитории и переезжают на второе устройство (§5.5). */
