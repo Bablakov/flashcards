@@ -12,6 +12,7 @@
 import { nanoid } from "nanoid";
 import { Card, Deck, DeckSettings, DeckSettingsSchema, DeckSummary, Rating } from "./types";
 import { CardContent, Group, GroupSettings } from "./model";
+import type { StudyItem } from "./session";
 import { scheduleAutoSync } from "./autosync";
 import { ensureReady } from "./migrate";
 import { bytesToDataUrl } from "./fs";
@@ -133,7 +134,7 @@ export async function listGroupSummaries(parentId: string | null): Promise<DeckS
   for (const group of childrenOf(groups, parentId)) {
     const ids = new Set(descendantIds(groups, group.id));
     const own = cards.filter((c) => ids.has(c.groupId));
-    const learned = own.filter((c) => (progress.get(c.id) ?? EMPTY_PROGRESS).box >= 5).length;
+    const learned = own.filter((c) => (progress.get(c.id) ?? EMPTY_PROGRESS).box >= 4).length;
     out.push({
       ...groupToDeck(group, own.length),
       progress: own.length === 0 ? 0 : Math.round((learned / own.length) * 100),
@@ -307,6 +308,24 @@ export async function getCards(deckId: string): Promise<Card[]> {
   const cards = (await allCards()).filter((c) => c.groupId === deckId);
   const progress = await getProgressMap();
   return cards.map((c) => contentToCard(c, progress.get(c.id) ?? EMPTY_PROGRESS));
+}
+
+/**
+ * Пул для самопроверки. `groupIds === null` — все группы; иначе указанные вместе
+ * со всеми их подгруппами. Возвращает карточку вместе с состоянием FSRS.
+ */
+export async function getStudyPool(groupIds: string[] | null): Promise<StudyItem[]> {
+  const groups = await allGroups();
+  const scope = groupIds
+    ? new Set(groupIds.flatMap((id) => descendantIds(groups, id)))
+    : null;
+  const progress = await getProgressMap();
+  return (await allCards())
+    .filter((c) => !scope || scope.has(c.groupId))
+    .map((c) => {
+      const p = progress.get(c.id) ?? EMPTY_PROGRESS;
+      return { card: contentToCard(c, p), groupId: c.groupId, progress: p };
+    });
 }
 
 /** Карточки группы вместе со всеми вложенными подгруппами. */

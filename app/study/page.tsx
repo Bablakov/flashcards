@@ -1,26 +1,32 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  RotateCcw,
-  Check,
-  X,
-  Minus,
-  Settings2,
-  Play,
-  Shuffle,
-  ListOrdered,
-  ArrowLeft,
-} from "lucide-react";
+import { Check, Minus, RotateCcw, Settings2, X } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
-import { Box, Card, Deck, Rating, StudyMode, languageInfo } from "@/lib/types";
-import { getCards, getDeck, rateCard, loadMediaDataUrl } from "@/lib/repository";
-import { BOX_COLORS, BOX_LABEL, selectStudyDeck } from "@/lib/srs";
+import { Box, Rating } from "@/lib/types";
+import { getStudyPool, listGroupOptions, loadMediaDataUrl, rateCard, type GroupOption } from "@/lib/repository";
+import { BOX_COLORS, BOX_LABEL } from "@/lib/srs";
+import { readSettings } from "@/lib/store";
+import {
+  affectsProgress,
+  buildSession,
+  firstSide,
+  poolStats,
+  type SessionDirection,
+  type SessionMode,
+  type SessionOrder,
+  type StudyItem,
+} from "@/lib/session";
 
-type Order = "random" | "sequential";
+const MODES: { key: SessionMode; title: string; hint: string }[] = [
+  { key: "review", title: "Повторение", hint: "то, что созрело сегодня" },
+  { key: "new", title: "Новые", hint: "ещё не показывались" },
+  { key: "training", title: "Тренировка", hint: "не влияет на прогресс" },
+  { key: "exam", title: "Экзамен", hint: "всё подряд, отчёт в конце" },
+];
 
-const COUNT_PRESETS = [10, 15, 30, 50];
+const COUNT_PRESETS = [10, 20, 50, 0];
 
 export default function StudyWrapper() {
   return (
@@ -33,300 +39,311 @@ export default function StudyWrapper() {
 function Study() {
   const sp = useSearchParams();
   const router = useRouter();
-  const deckId = sp.get("deck") ?? "";
-  const modeParam = sp.get("mode") as StudyMode | null;
-  const isSetup = !modeParam;
-
-  if (!deckId) {
-    return (
-      <>
-        <TopBar back title="Тест" rightSlot={<div className="w-10" />} />
-        <div className="flex-1 px-4 py-12 text-center text-text-muted">Колода не выбрана</div>
-      </>
-    );
-  }
-
-  if (isSetup) {
-    return <StudySetup deckId={deckId} router={router} />;
-  }
-
-  return <StudySession deckId={deckId} sp={sp} router={router} />;
+  const started = sp.get("go") === "1";
+  return started ? <StudySession sp={sp} router={router} /> : <StudySetup sp={sp} router={router} />;
 }
 
+/* ------------------------------------------------------------- настройка */
+
 function StudySetup({
-  deckId,
+  sp,
   router,
 }: {
-  deckId: string;
+  sp: ReturnType<typeof useSearchParams>;
   router: ReturnType<typeof useRouter>;
 }) {
-  const [deck, setDeck] = useState<Deck | null>(null);
-  const [cards, setCards] = useState<Card[]>([]);
-  const [mode, setMode] = useState<StudyMode>("review");
-  const [count, setCount] = useState<number>(10);
-  const [customCount, setCustomCount] = useState<string>("");
-  const [order, setOrder] = useState<Order>("random");
-  const [boxes, setBoxes] = useState<Box[]>([1, 2, 3, 4, 5]);
+  const deckId = sp.get("deck") ?? "";
+  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [selected, setSelected] = useState<string[]>(deckId ? [deckId] : []);
+  const [allGroups, setAllGroups] = useState(!deckId);
+  const [mode, setMode] = useState<SessionMode>("review");
+  const [levels, setLevels] = useState<Box[]>([]);
+  const [onlyErrors, setOnlyErrors] = useState(false);
+  const [count, setCount] = useState(0);
+  const [order, setOrder] = useState<SessionOrder>("random");
+  const [direction, setDirection] = useState<SessionDirection>("front");
+  const [pool, setPool] = useState<StudyItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [d, list] = await Promise.all([getDeck(deckId), getCards(deckId)]);
-      setDeck(d);
-      setCards(list);
+      setGroups(await listGroupOptions());
     })();
-  }, [deckId]);
+  }, []);
 
-  const total = cards.length;
-  const filtered = useMemo(
-    () => cards.filter((c) => boxes.includes(c.box)),
-    [cards, boxes],
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        setPool(await getStudyPool(allGroups ? null : selected));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [allGroups, selected]);
+
+  const stats = useMemo(() => poolStats(pool), [pool]);
+  const preview = useMemo(
+    () => buildSession(pool, { mode, levels, onlyErrors, count, order }).length,
+    [pool, mode, levels, onlyErrors, count, order],
   );
-  const effectiveCount = Math.min(count, filtered.length || 1);
 
-  function toggleBox(b: Box) {
-    setBoxes((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
+  function toggleGroup(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function toggleLevel(b: Box) {
+    setLevels((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
   }
 
   function start() {
-    const params = new URLSearchParams({ deck: deckId, mode });
-    params.set("count", String(count));
-    if (mode === "self") params.set("order", order);
-    if (boxes.length && boxes.length < 5) params.set("boxes", boxes.join(","));
-    router.replace(`/study?${params.toString()}`);
+    const params = new URLSearchParams({ go: "1", mode, order, dir: direction });
+    if (!allGroups && selected.length) params.set("groups", selected.join(","));
+    if (levels.length) params.set("levels", levels.join(","));
+    if (onlyErrors) params.set("errors", "1");
+    if (count > 0) params.set("count", String(count));
+    if (deckId) params.set("deck", deckId);
+    router.push(`/study?${params.toString()}`);
   }
 
   return (
     <>
-      <TopBar back title={deck?.name ? `Тест: ${deck.name}` : "Тест"} rightSlot={<div className="w-10" />} />
+      <TopBar back title="Самопроверка" rightSlot={<div className="w-10" />} />
       <main className="flex-1 space-y-4 px-4 pb-12 pt-2">
         <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="mb-3 text-sm font-semibold text-text-primary">Режим</div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <ModeButton
-              active={mode === "review"}
-              onClick={() => setMode("review")}
-              title="Повторение"
-              hint="Сначала слабые карточки"
+          <div className="mb-3 text-sm font-medium text-text-secondary">Область</div>
+          <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-xl bg-bg-soft px-4 py-3">
+            <input
+              type="checkbox"
+              checked={allGroups}
+              onChange={(e) => setAllGroups(e.target.checked)}
             />
-            <ModeButton
-              active={mode === "self"}
-              onClick={() => setMode("self")}
-              title="Самопроверка"
-              hint="Все карточки подряд"
-            />
-          </div>
-        </section>
-
-        {mode === "self" && (
-          <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-            <div className="mb-3 text-sm font-semibold text-text-primary">Порядок</div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setOrder("random")}
-                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-medium transition ${
-                  order === "random"
-                    ? "bg-[var(--accent)]/15 text-[var(--accent)] ring-1 ring-[var(--accent)]/40"
-                    : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"
-                }`}
-              >
-                <Shuffle size={16} /> Случайный
-              </button>
-              <button
-                onClick={() => setOrder("sequential")}
-                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-medium transition ${
-                  order === "sequential"
-                    ? "bg-[var(--accent)]/15 text-[var(--accent)] ring-1 ring-[var(--accent)]/40"
-                    : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"
-                }`}
-              >
-                <ListOrdered size={16} /> По порядку
-              </button>
+            <span className="text-sm text-text-secondary">Все группы сразу</span>
+          </label>
+          {!allGroups && (
+            <div className="max-h-52 space-y-1 overflow-y-auto">
+              {groups.map((g) => (
+                <label
+                  key={g.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-bg-soft"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(g.id)}
+                    onChange={() => toggleGroup(g.id)}
+                  />
+                  <span className="text-text-secondary">{g.label}</span>
+                </label>
+              ))}
+              <div className="px-2 pt-1 text-[11px] text-text-faint">
+                Выбранная группа берётся вместе со всеми подгруппами.
+              </div>
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-semibold text-text-primary">Сколько карт</div>
-            <div className="text-xs text-text-faint">из {filtered.length} доступных</div>
+            <span className="text-sm font-medium text-text-secondary">Режим</span>
+            <span className="text-xs text-text-faint">
+              {loading
+                ? "считаем..."
+                : `созрело ${stats.due} · новых ${stats.new} · всего ${stats.total}`}
+            </span>
           </div>
-          <div className="mb-3 grid grid-cols-4 gap-2">
-            {COUNT_PRESETS.map((n) => (
+          <div className="grid grid-cols-2 gap-2">
+            {MODES.map((m) => (
               <button
-                key={n}
-                onClick={() => {
-                  setCount(n);
-                  setCustomCount("");
-                }}
-                className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                  count === n && !customCount
-                    ? "bg-[var(--accent)]/15 text-[var(--accent)] ring-1 ring-[var(--accent)]/40"
-                    : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"
+                key={m.key}
+                onClick={() => setMode(m.key)}
+                className={`rounded-xl px-3 py-2 text-left transition ${
+                  mode === m.key
+                    ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                    : "bg-bg-soft text-text-secondary hover:bg-[var(--ring-base)]"
                 }`}
               >
-                {n}
+                <div className="text-sm font-semibold">{m.title}</div>
+                <div className="text-[11px] opacity-80">{m.hint}</div>
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-text-muted">Свой:</label>
-            <input
-              type="number"
-              min={1}
-              max={500}
-              value={customCount}
-              onChange={(e) => {
-                const v = e.target.value;
-                setCustomCount(v);
-                const n = Number(v);
-                if (Number.isFinite(n) && n > 0) setCount(n);
-              }}
-              placeholder="например, 25"
-              className="field flex-1 px-3 py-2 text-sm"
-            />
-          </div>
         </section>
 
-        <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="mb-3 text-sm font-semibold text-text-primary">Из каких корзин</div>
+        <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+          <div className="text-sm font-medium text-text-secondary">Часть выборки</div>
           <div className="flex flex-wrap gap-2">
             {([1, 2, 3, 4, 5] as Box[]).map((b) => (
               <button
                 key={b}
-                onClick={() => toggleBox(b)}
+                onClick={() => toggleLevel(b)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  boxes.includes(b) ? "text-white" : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"
+                  levels.includes(b) ? "text-white" : "bg-bg-soft text-text-secondary"
                 }`}
-                style={boxes.includes(b) ? { backgroundColor: BOX_COLORS[b] } : undefined}
+                style={levels.includes(b) ? { backgroundColor: BOX_COLORS[b] } : undefined}
               >
                 {BOX_LABEL[b]}
               </button>
             ))}
           </div>
-          <div className="mt-2 text-[11px] text-text-faint">
-            Всего в колоде: {total}
+          <label className="flex cursor-pointer items-center gap-3 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              checked={onlyErrors}
+              onChange={(e) => setOnlyErrors(e.target.checked)}
+            />
+            Только те, где были ошибки
+          </label>
+
+          <div>
+            <div className="mb-1 text-sm text-text-secondary">Сколько карточек</div>
+            <div className="flex flex-wrap gap-2">
+              {COUNT_PRESETS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCount(c)}
+                  className={`rounded-lg px-3 py-1.5 text-xs transition ${
+                    count === c
+                      ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                      : "bg-bg-soft text-text-secondary"
+                  }`}
+                >
+                  {c === 0 ? "Все" : c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <div className="mb-1 text-sm text-text-secondary">Порядок</div>
+              <select
+                value={order}
+                onChange={(e) => setOrder(e.target.value as SessionOrder)}
+                className="field"
+              >
+                <option value="random">Вперемешку</option>
+                <option value="sequential">По порядку</option>
+                <option value="weak">Слабые первыми</option>
+              </select>
+            </label>
+            <label className="block">
+              <div className="mb-1 text-sm text-text-secondary">Сторона</div>
+              <select
+                value={direction}
+                onChange={(e) => setDirection(e.target.value as SessionDirection)}
+                className="field"
+              >
+                <option value="front">Лицевая → обратная</option>
+                <option value="back">Обратная → лицевая</option>
+                <option value="mixed">Вперемешку</option>
+              </select>
+            </label>
           </div>
         </section>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            onClick={() => router.replace(`/deck?id=${deckId}`)}
-            className="pill-button flex-1 justify-center"
-          >
-            <ArrowLeft size={16} /> Назад
-          </button>
-          <button
-            onClick={start}
-            disabled={filtered.length === 0}
-            className="pill-button flex-[2] justify-center bg-emerald-500/20 text-emerald-600 hover:bg-emerald-500/30"
-          >
-            <Play size={16} /> Запустить ({effectiveCount})
-          </button>
-        </div>
+        <button
+          onClick={start}
+          disabled={preview === 0}
+          className="pill-button w-full justify-center bg-emerald-500/20 py-3 text-emerald-600 hover:bg-emerald-500/30 disabled:opacity-40"
+        >
+          Начать — {preview} карт.
+        </button>
+        {preview === 0 && !loading && (
+          <div className="text-center text-xs text-text-faint">
+            Под выбранные условия карточек нет. Попробуй режим «Тренировка» или сними фильтры.
+          </div>
+        )}
       </main>
     </>
   );
 }
 
-function ModeButton({
-  active,
-  onClick,
-  title,
-  hint,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  hint: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-col items-start gap-1 rounded-xl px-4 py-3 text-left transition ${
-        active
-          ? "bg-[var(--accent)]/15 text-[var(--accent)] ring-1 ring-[var(--accent)]/40"
-          : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"
-      }`}
-    >
-      <span className="text-base font-semibold">{title}</span>
-      <span className="text-xs opacity-80">{hint}</span>
-    </button>
-  );
-}
+/* --------------------------------------------------------------- сессия */
 
 function StudySession({
-  deckId,
   sp,
   router,
 }: {
-  deckId: string;
   sp: ReturnType<typeof useSearchParams>;
   router: ReturnType<typeof useRouter>;
 }) {
-  const mode = (sp.get("mode") as StudyMode | null) ?? "review";
-  const order = (sp.get("order") as Order | null) ?? "random";
-  const countParam = Number(sp.get("count") ?? "");
-  const boxesParam = (sp.get("boxes") ?? "")
-    .split(",")
-    .map((x) => parseInt(x, 10))
-    .filter((x) => x >= 1 && x <= 5) as Box[];
+  const mode = (sp.get("mode") as SessionMode | null) ?? "review";
+  const order = (sp.get("order") as SessionOrder | null) ?? "random";
+  const direction = (sp.get("dir") as SessionDirection | null) ?? "front";
+  const groupsParam = sp.get("groups") ?? "";
+  const levelsParam = sp.get("levels") ?? "";
+  const onlyErrors = sp.get("errors") === "1";
+  const countParam = Number(sp.get("count") ?? "0");
+  const deckId = sp.get("deck") ?? "";
 
-  const [deck, setDeck] = useState<Deck | null>(null);
-  const [queue, setQueue] = useState<Card[]>([]);
+  const [queue, setQueue] = useState<StudyItem[]>([]);
   const [idx, setIdx] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [imageFront, setImageFront] = useState<string | null>(null);
-  const [imageBack, setImageBack] = useState<string | null>(null);
+  const [images, setImages] = useState<{ front: string | null; back: string | null }>({
+    front: null,
+    back: null,
+  });
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
   const [stats, setStats] = useState({ good: 0, neutral: 0, bad: 0 });
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const d = await getDeck(deckId);
-      const cards = await getCards(deckId);
-      setDeck(d);
-      const selected = selectStudyDeck(cards, {
-        count: Number.isFinite(countParam) && countParam > 0 ? countParam : undefined,
-        boxes: boxesParam.length ? boxesParam : undefined,
-        prioritizeWeak: mode === "review",
-        preserveOrder: mode === "self" && order === "sequential",
-        shuffle: !(mode === "self" && order === "sequential"),
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const settings = await readSettings();
+      const groupIds = groupsParam ? groupsParam.split(",").filter(Boolean) : null;
+      const pool = await getStudyPool(groupIds);
+      const levels = levelsParam
+        .split(",")
+        .map((x) => parseInt(x, 10))
+        .filter((x) => x >= 1 && x <= 5) as Box[];
+      const session = buildSession(pool, {
+        mode,
+        levels,
+        onlyErrors,
+        count: countParam,
+        order,
+        newLimit: settings.dailyNewLimit,
+        reviewLimit: settings.dailyReviewLimit,
       });
-      setQueue(selected);
+      setQueue(session);
       setIdx(0);
       setFlipped(false);
-      setDone(selected.length === 0);
-      setLoading(false);
+      setDone(session.length === 0);
       setStats({ good: 0, neutral: 0, bad: 0 });
-    })();
+    } finally {
+      setLoading(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deckId, mode, countParam, order, sp.get("boxes")]);
+  }, [groupsParam, levelsParam, onlyErrors, countParam, mode, order]);
 
-  const card = queue[idx] ?? null;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const item = queue[idx] ?? null;
+  const startSide = firstSide(direction, idx);
+  const showingBack = startSide === "front" ? flipped : !flipped;
 
   useEffect(() => {
     let active = true;
     (async () => {
-      if (!card || !deckId) {
-        setImageFront(null);
-        setImageBack(null);
+      if (!item) {
+        setImages({ front: null, back: null });
         return;
       }
-      const [fi, bi] = await Promise.all([
-        card.front.image ? loadMediaDataUrl(deckId, card.front.image) : Promise.resolve(null),
-        card.back.image ? loadMediaDataUrl(deckId, card.back.image) : Promise.resolve(null),
+      const [f, b] = await Promise.all([
+        item.card.front.image ? loadMediaDataUrl("", item.card.front.image) : Promise.resolve(null),
+        item.card.back.image ? loadMediaDataUrl("", item.card.back.image) : Promise.resolve(null),
       ]);
       if (!active) return;
-      setImageFront(fi);
-      setImageBack(bi);
+      setImages({ front: f, back: b });
       setFlipped(false);
     })();
     return () => {
       active = false;
     };
-  }, [card, deckId]);
+  }, [item]);
 
   const swipeStart = useRef<{ x: number; y: number; t: number } | null>(null);
 
@@ -337,55 +354,31 @@ function StudySession({
     const start = swipeStart.current;
     swipeStart.current = null;
     if (!start) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > 40) {
-      setFlipped((f) => !f);
-    } else if (Date.now() - start.t < 350 && dist < 12) {
-      setFlipped((f) => !f);
-    }
+    const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (dist > 40 || (Date.now() - start.t < 350 && dist < 12)) setFlipped((f) => !f);
   }
 
   async function rate(rating: Rating) {
-    if (!card) return;
-    // Ответ пишется событием в журнал (lib/progress.ts), файл карточки не трогается —
-    // поэтому прохождение на двух устройствах никогда не конфликтует в git.
-    await rateCard(card.id, rating);
-    const newStats = { ...stats };
-    if (rating === "good") newStats.good += 1;
-    else if (rating === "neutral") newStats.neutral += 1;
-    else newStats.bad += 1;
-    setStats(newStats);
-
-    if (idx + 1 >= queue.length) {
-      setDone(true);
-    } else {
+    if (!item) return;
+    // В тренировке и экзамене прогресс не трогаем — ответ не пишется в журнал.
+    if (affectsProgress(mode)) await rateCard(item.card.id, rating);
+    setStats((s) => ({ ...s, [rating]: s[rating] + 1 }));
+    if (idx + 1 >= queue.length) setDone(true);
+    else {
       setIdx((i) => i + 1);
       setFlipped(false);
     }
   }
 
   function gotoSetup() {
-    router.replace(`/study?deck=${deckId}`);
+    router.replace(deckId ? `/study?deck=${deckId}` : "/study");
   }
 
   if (loading) {
     return (
       <>
-        <TopBar back title="Изучение" rightSlot={<div className="w-10" />} />
+        <TopBar back title="Самопроверка" rightSlot={<div className="w-10" />} />
         <div className="flex-1 px-4 py-12 text-center text-text-muted">Загрузка...</div>
-      </>
-    );
-  }
-
-  if (queue.length === 0) {
-    return (
-      <>
-        <TopBar back title="Изучение" rightSlot={<div className="w-10" />} />
-        <div className="flex-1 px-4 py-12 text-center text-text-muted">
-          Нет карточек, подходящих под фильтр.
-        </div>
       </>
     );
   }
@@ -394,36 +387,35 @@ function StudySession({
     const total = stats.good + stats.neutral + stats.bad;
     return (
       <>
-        <TopBar back title="Готово!" rightSlot={<div className="w-10" />} />
+        <TopBar back title={total ? "Готово!" : "Пусто"} rightSlot={<div className="w-10" />} />
         <main className="flex-1 px-4 pb-12 pt-2">
           <div className="rounded-3xl bg-bg-card p-6 ring-1 ring-[var(--ring-base)]">
             <div className="text-center text-2xl font-semibold text-text-primary">
-              Сессия завершена
+              {total ? "Сессия завершена" : "Нет карточек под выбранные условия"}
             </div>
-            <div className="mt-1 text-center text-sm text-text-muted">
-              Просмотрено карточек: {total}
-            </div>
-            <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-              <ResultStat label="Плохо" value={stats.bad} color="#ef4444" />
-              <ResultStat label="Нейтр." value={stats.neutral} color="#eab308" />
-              <ResultStat label="Хорошо" value={stats.good} color="#22c55e" />
-            </div>
+            {total > 0 && (
+              <>
+                <div className="mt-1 text-center text-sm text-text-muted">
+                  Просмотрено карточек: {total}
+                  {!affectsProgress(mode) && " · прогресс не изменялся"}
+                </div>
+                <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+                  <ResultStat label="Не помню" value={stats.bad} color="#ef4444" />
+                  <ResultStat label="Что-то помню" value={stats.neutral} color="#eab308" />
+                  <ResultStat label="Хорошо" value={stats.good} color="#22c55e" />
+                </div>
+              </>
+            )}
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <button className="pill-button" onClick={() => router.replace(`/deck?id=${deckId}`)}>
-                К колоде
+              <button className="pill-button" onClick={() => router.replace("/")}>
+                На главную
               </button>
-              <button
-                className="pill-button"
-                onClick={gotoSetup}
-              >
+              <button className="pill-button" onClick={gotoSetup}>
                 <Settings2 size={16} /> Настройки
               </button>
               <button
                 className="pill-button bg-[var(--accent)]/15 text-[var(--accent)]"
-                onClick={() => {
-                  const params = new URLSearchParams(sp.toString());
-                  router.replace(`/study?${params.toString()}`);
-                }}
+                onClick={load}
               >
                 Ещё раз
               </button>
@@ -434,10 +426,10 @@ function StudySession({
     );
   }
 
-  if (!card || !deck) return null;
+  if (!item) return null;
 
-  const front = languageInfo(deck.settings.frontLanguage);
-  const back = languageInfo(deck.settings.backLanguage);
+  const frontText = item.card.front.text;
+  const backText = item.card.back.text;
 
   return (
     <>
@@ -449,42 +441,52 @@ function StudySession({
             <button className="icon-btn" onClick={gotoSetup} aria-label="Настройки сессии">
               <Settings2 size={18} />
             </button>
-            <button className="icon-btn" onClick={() => setFlipped((f) => !f)} aria-label="Перевернуть">
+            <button
+              className="icon-btn"
+              onClick={() => setFlipped((f) => !f)}
+              aria-label="Перевернуть"
+            >
               <RotateCcw size={18} />
             </button>
           </>
         }
       />
       <main className="flex flex-1 flex-col px-4 pb-8 pt-2">
-        <div className="mb-3 flex items-center justify-between text-xs text-text-muted">
+        <div className="mb-2 flex items-center justify-between text-xs text-text-muted">
           <span
             className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
-            style={{ backgroundColor: BOX_COLORS[card.box] }}
+            style={{ backgroundColor: BOX_COLORS[item.progress.box] }}
           >
-            {BOX_LABEL[card.box]}
+            {BOX_LABEL[item.progress.box]}
           </span>
-          <span>
-            {flipped ? `${back.flag} ${back.name}` : `${front.flag} ${front.name}`}
+          <span className="text-text-faint">
+            {showingBack ? "ответ" : "вопрос"}
+            {!affectsProgress(mode) && " · без записи прогресса"}
           </span>
         </div>
 
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-soft">
+          <div
+            className="h-full rounded-full bg-[var(--accent)] transition-all"
+            style={{ width: `${Math.round(((idx + (done ? 1 : 0)) / queue.length) * 100)}%` }}
+          />
+        </div>
+
         <div
-          className="flip-card relative mx-auto w-full max-w-md"
-          style={{ height: "60vh", minHeight: 360 }}
+          className="flip-card relative mx-auto mt-3 w-full max-w-md"
+          style={{ height: "58vh", minHeight: 340 }}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
         >
           <div className={`flip-inner h-full w-full ${flipped ? "flipped" : ""}`}>
             <CardFace
-              text={card.front.text}
-              imageUrl={imageFront}
-              accent={deck.color}
+              text={startSide === "front" ? frontText : backText}
+              imageUrl={startSide === "front" ? images.front : images.back}
               hint="свайп / тап → переворот"
             />
             <CardFace
-              text={card.back.text}
-              imageUrl={imageBack}
-              accent={deck.color}
+              text={startSide === "front" ? backText : frontText}
+              imageUrl={startSide === "front" ? images.back : images.front}
               back
               hint="оцени, как запомнил"
             />
@@ -493,13 +495,13 @@ function StudySession({
 
         <div className="mt-4 grid grid-cols-3 gap-2">
           <RateButton
-            label="Плохо"
+            label="Не помню"
             color="#ef4444"
             icon={<X size={18} />}
             onClick={() => rate("bad")}
           />
           <RateButton
-            label="Нейтрально"
+            label="Что-то помню"
             color="#eab308"
             icon={<Minus size={18} />}
             onClick={() => rate("neutral")}
@@ -519,20 +521,17 @@ function StudySession({
 function CardFace({
   text,
   imageUrl,
-  accent,
   back,
   hint,
 }: {
   text: string;
   imageUrl: string | null;
-  accent: string;
   back?: boolean;
   hint?: string;
 }) {
   return (
     <div
       className={`flip-face ${back ? "back" : ""} flex h-full w-full flex-col rounded-3xl bg-bg-card p-6 shadow-lg ring-1 ring-[var(--ring-base)]`}
-      style={{ borderTop: `4px solid ${accent}` }}
     >
       {imageUrl && (
         <div className="mb-4 flex h-[35%] flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-bg-soft">
@@ -566,22 +565,22 @@ function RateButton({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-95"
+      className="flex flex-col items-center gap-1 rounded-2xl px-3 py-3 text-sm font-semibold text-white transition active:scale-95"
       style={{ backgroundColor: color }}
     >
       {icon}
-      <span>{label}</span>
+      <span className="text-[11px]">{label}</span>
     </button>
   );
 }
 
 function ResultStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="rounded-xl bg-bg-soft p-3 ring-1 ring-[var(--ring-base)]">
-      <div className="text-2xl font-bold" style={{ color }}>
+    <div className="rounded-2xl bg-bg-soft px-3 py-4 ring-1 ring-[var(--ring-base)]">
+      <div className="text-2xl font-semibold" style={{ color }}>
         {value}
       </div>
-      <div className="text-xs text-text-muted">{label}</div>
+      <div className="mt-1 text-[11px] text-text-muted">{label}</div>
     </div>
   );
 }
