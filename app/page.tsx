@@ -24,6 +24,7 @@ import { onPendingChange, syncNow } from "@/lib/autosync";
 import { maybeInstallSeed } from "@/lib/seed";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
 import { DeckCard } from "@/components/DeckCard";
+import { FirstRunHint } from "@/components/FirstRunHint";
 import { importPackedDeck, isPackedDeck } from "@/lib/pack";
 
 export default function HomePage() {
@@ -210,6 +211,7 @@ export default function HomePage() {
     <>
       <TopBar />
       <main className="flex-1 px-4 pb-24 pt-2">
+        <FirstRunHint />
         <div className="mb-3 flex items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-[var(--ring-base)]">
           <Search size={16} className="text-text-faint" />
           <input
