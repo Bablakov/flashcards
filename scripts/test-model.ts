@@ -18,6 +18,7 @@ import {
 import { flashcardsMergeDriver } from "../lib/merge";
 import { childrenOf, descendantIds, pathTo, canReparent } from "../lib/store";
 import { affectsProgress, buildSession, firstSide, poolStats, type StudyItem } from "../lib/session";
+import { decodeNativeBody } from "../lib/git-http";
 import type { JournalEvent } from "../lib/model";
 import type { Group } from "../lib/model";
 
@@ -212,6 +213,37 @@ console.log("\nСборка сессии");
   check("сводка пула", stats.total === 5 && stats.due === 2 && stats.new === 2 && stats.learned === 1);
   check("направление «вперемешку» чередует стороны", firstSide("mixed", 0) === "front" && firstSide("mixed", 1) === "back");
   check("направление «обратная» фиксировано", firstSide("back", 0) === "back" && firstSide("back", 5) === "back");
+}
+
+console.log("\nРазбор ответа нативного HTTP (Android)");
+{
+  const dec = new TextDecoder();
+  const b64 = (str: string) => Buffer.from(str, "utf8").toString("base64");
+
+  check(
+    "двоичный ответ приходит base64 и декодируется",
+    dec.decode(decodeNativeBody(b64("PACK-data-here"))) === "PACK-data-here",
+  );
+  check(
+    "base64 с переводами строк (их вставляет Android)",
+    dec.decode(decodeNativeBody(b64("hello world").replace(/(.{4})/g, "$1\n"))) === "hello world",
+  );
+  check(
+    "текстовый ответ git не декодируется как base64",
+    dec.decode(decodeNativeBody("001e# service=git-upload-pack\n")) === "001e# service=git-upload-pack\n",
+  );
+  check(
+    "пустой пакет git «0000» не принимается за base64",
+    dec.decode(decodeNativeBody("0000")) === "0000",
+  );
+  check(
+    "пустое тело и null",
+    decodeNativeBody("").length === 0 && decodeNativeBody(null).length === 0,
+  );
+  check(
+    "объект вместо строки не роняет разбор",
+    decodeNativeBody({ message: "Not Found" }).length > 0,
+  );
 }
 
 console.log("\nСлияние файлов при синхронизации");

@@ -55,6 +55,54 @@ function base64ToBytes(base64: string): Uint8Array {
   return out;
 }
 
+function textToBytes(text: string): Uint8Array {
+  const out = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i) & 0xff;
+  return out;
+}
+
+/**
+ * Нативный слой отдаёт тело по-разному: двоичный ответ приходит base64, а
+ * текстовый (например, первый ответ git с перечнем веток) — обычной строкой.
+ * Слепой вызов atob на такой строке падал с «not correctly encoded» и валил
+ * клонирование, поэтому формат определяется, а не предполагается.
+ */
+function looksLikeGitPayload(raw: string): boolean {
+  // Ответы git начинаются либо с пакета «PACK», либо со строки pkt-line:
+  // четыре шестнадцатеричные цифры с длиной блока. Это надёжнее, чем гадать
+  // по алфавиту: строка «0000» (пустой пакет git) сама по себе выглядит как base64.
+  if (raw.startsWith("PACK") || raw.startsWith("#")) return true;
+  const head = raw.slice(0, 4);
+  if (!/^[0-9a-f]{4}$/.test(head)) return false;
+  const declared = parseInt(head, 16);
+  return declared === 0 || (declared >= 4 && declared <= raw.length);
+}
+
+export function decodeNativeBody(data: unknown): Uint8Array {
+  if (data == null) return new Uint8Array(0);
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) {
+    const view = data as ArrayBufferView;
+    return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  }
+  if (typeof data !== "string") return textToBytes(JSON.stringify(data));
+  if (looksLikeGitPayload(data)) return textToBytes(data);
+
+  // Пробелы и переводы строк вставляет сам кодировщик Android; URL-safe вариант
+  // (- и _) atob не понимает, поэтому приводим к обычному алфавиту.
+  const cleaned = data.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  const looksBase64 =
+    cleaned.length > 0 && cleaned.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(cleaned);
+  if (looksBase64) {
+    try {
+      return base64ToBytes(cleaned);
+    } catch {
+      // не base64, несмотря на вид — падаем в текстовую ветку
+    }
+  }
+  return textToBytes(data);
+}
+
 function desktop(): DesktopBridge | null {
   if (typeof window === "undefined") return null;
   const bridge = (window as unknown as { desktop?: DesktopBridge }).desktop;
@@ -151,7 +199,7 @@ async function nativeRequest(req: GitHttpRequest): Promise<GitHttpResponse> {
     statusCode: res.status,
     statusMessage: String(res.status),
     headers,
-    body: single(base64ToBytes(typeof res.data === "string" ? res.data : "")),
+    body: single(decodeNativeBody(res.data)),
   };
 }
 
