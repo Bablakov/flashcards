@@ -54,33 +54,86 @@ jobs:
         run: npx --yes @capacitor/assets generate --android --assetPath assets
         continue-on-error: true
 
-      # Подпись обязательна для обновления поверх: APK с другим ключом Android
-      # ставить откажется. Ключ хранится в секретах и в личном бэкапе.
-      - name: Restore keystore
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+      # versionCode обязан расти, иначе Android не поставит обновление поверх.
+      - name: Set version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          sed -i "s/versionCode [0-9]\+/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VERSION\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      # Подпись обязательна для обновления поверх: APK, подписанный другим ключом,
+      # Android ставить откажется — придётся удалять приложение вместе с данными.
+      - name: Configure signing
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "Keystore secret is empty — собираем debug-сборку"
+            exit 0
+          fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
-          {
-            echo "storeFile=release.keystore"
-            echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
-            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"
-            echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
-          } > android/keystore.properties
+          cat > android/keystore.properties <<EOF
+          storeFile=$GITHUB_WORKSPACE/android/app/release.keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+          cat >> android/app/build.gradle <<'EOF'
+
+          // Подпись релиза (добавляется из CI): параметры читаются из keystore.properties.
+          android {
+              signingConfigs {
+                  release {
+                      def props = new Properties()
+                      def propsFile = rootProject.file("keystore.properties")
+                      if (propsFile.exists()) {
+                          props.load(new FileInputStream(propsFile))
+                          storeFile file(props['storeFile'])
+                          storePassword props['storePassword']
+                          keyAlias props['keyAlias']
+                          keyPassword props['keyPassword']
+                      }
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+          echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build debug APK
+      - name: Build APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            ./gradlew assembleRelease --no-daemon
+          else
+            ./gradlew assembleDebug --no-daemon
+          fi
 
-      - name: Rename APK
+      - name: Collect APK
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk \
-             artifacts/flashcards-${{ github.run_number }}.apk
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk \
+               "artifacts/flashcards-$VERSION-${{ github.run_number }}.apk"
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk \
+               "artifacts/flashcards-$VERSION-${{ github.run_number }}-debug.apk"
+          fi
+          ls -la artifacts
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
