@@ -1,7 +1,7 @@
 "use client";
 
 import * as git from "isomorphic-git";
-import http from "isomorphic-git/http/web";
+import { gitHttp, isDesktopApp } from "./git-http";
 import { Buffer } from "buffer";
 import { getFS, REPO_ROOT, ensureRepoSkeleton, exists } from "./fs";
 import { GitConfig } from "./types";
@@ -34,6 +34,9 @@ function authFor(cfg: GitConfig): { username: string; password: string } | undef
  * Android WebView блокируются CORS. Пустая строка → undefined (прямое соединение).
  */
 function corsProxyFor(cfg: GitConfig): string | undefined {
+  // В ПК-приложении и в Android-сборке запрос идёт мимо браузерного CORS,
+  // поэтому прокси не нужен даже если он указан в настройках.
+  if (isDesktopApp()) return undefined;
   return cfg.corsProxy?.trim() ? cfg.corsProxy.trim() : undefined;
 }
 
@@ -53,7 +56,7 @@ export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void):
   onProgress?.("Клонируем репозиторий...");
   await git.clone({
     fs: fsRef(),
-    http,
+    http: gitHttp,
     dir: REPO_ROOT,
     url: cfg.remoteUrl,
     corsProxy: corsProxyFor(cfg),
@@ -132,7 +135,7 @@ export async function pull(cfg: GitConfig, onProgress?: (m: string) => void): Pr
   // чтобы fastForward падал в настоящий 3-way merge без потери правок двух устройств.
   const opts = {
     fs: fsRef(),
-    http,
+    http: gitHttp,
     dir: REPO_ROOT,
     corsProxy: corsProxyFor(cfg),
     ref: cfg.branch || "main",
@@ -154,7 +157,7 @@ export async function push(cfg: GitConfig, onProgress?: (m: string) => void): Pr
   onProgress?.("Push...");
   await git.push({
     fs: fsRef(),
-    http,
+    http: gitHttp,
     dir: REPO_ROOT,
     corsProxy: corsProxyFor(cfg),
     remote: "origin",

@@ -28,6 +28,8 @@ export default function SettingsPage() {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [app, setApp] = useState<AppSettings>(() => AppSettingsSchema.parse({}));
   const [deviceNotifications, setDeviceNotifications] = useState(true);
+  const [autoLaunch, setAutoLaunch] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -35,6 +37,13 @@ export default function SettingsPage() {
     refresh();
     void readSettings().then(setApp);
     setDeviceNotifications(enabledOnThisDevice());
+    const desktop = (window as unknown as {
+      desktop?: { isDesktop: boolean; getAutoLaunch: () => Promise<boolean>; setAutoLaunch: (v: boolean) => Promise<boolean> };
+    }).desktop;
+    if (desktop?.isDesktop) {
+      setIsDesktop(true);
+      void desktop.getAutoLaunch().then(setAutoLaunch);
+    }
   }, []);
 
   /** Настройки приложения лежат в репозитории и переезжают на второе устройство (§5.5). */
@@ -313,6 +322,25 @@ export default function SettingsPage() {
           <button onClick={handleTestNotification} className="pill-button">
             Проверить уведомление
           </button>
+          {isDesktop && (
+            <>
+              <SyncToggle
+                label="Запускать вместе с Windows (свёрнутым в трей)"
+                checked={autoLaunch}
+                onChange={async (v) => {
+                  const desktop = (window as unknown as {
+                    desktop?: { setAutoLaunch: (x: boolean) => Promise<boolean> };
+                  }).desktop;
+                  const next = (await desktop?.setAutoLaunch(v)) ?? false;
+                  setAutoLaunch(next);
+                }}
+              />
+              <p className="text-xs text-text-faint">
+                На ПК уведомление приходит, только пока приложение запущено. Автозапуск и трей
+                нужны, чтобы напоминания срабатывали без открытого окна.
+              </p>
+            </>
+          )}
         </section>
 
         <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
