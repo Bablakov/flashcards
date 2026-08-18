@@ -64,8 +64,16 @@ export function DeckCard({ deck, onAddCard, onEdit, onDelete }: Props) {
           }}
         >
           {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt="" className="h-full w-full object-contain" />
+            <>
+              {/* Обложка заполняет плитку целиком, название читается поверх затемнения. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-4 pb-2 pt-8">
+                <div className="truncate font-display text-xl text-white drop-shadow">
+                  {deck.name}
+                </div>
+              </div>
+            </>
           ) : (
             <div
               className="flex h-full items-center justify-center"
@@ -89,9 +97,11 @@ export function DeckCard({ deck, onAddCard, onEdit, onDelete }: Props) {
         </div>
 
         <div className="px-4 py-3">
-          <div className="flex items-center gap-2 text-base font-semibold text-text-primary">
-            <span className="truncate">{deck.name}</span>
-          </div>
+          {!imageUrl && (
+            <div className="flex items-center gap-2 text-base font-semibold text-text-primary">
+              <span className="truncate">{deck.name}</span>
+            </div>
+          )}
           <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
             <span className="lang-chip" title={front.name}>
               {front.flag} {front.code.toUpperCase()}

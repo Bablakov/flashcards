@@ -16,7 +16,7 @@ import {
   updateCard,
   type GroupOption,
 } from "@/lib/repository";
-import { fileToBytes } from "@/lib/media";
+import { compressImage } from "@/lib/media";
 import { ImageInput } from "@/components/ImageInput";
 import { toast } from "@/components/Toaster";
 import { BOX_COLORS, BOX_LABEL } from "@/lib/srs";
@@ -77,7 +77,7 @@ function CardEditor() {
 
   async function handleImagePicked(side: "front" | "back", file: File) {
     if (!card) return;
-    const { bytes, ext } = await fileToBytes(file);
+    const { bytes, ext } = await compressImage(file);
     const path = await saveMedia(deckId, card.id, side, "image", bytes, ext);
     const updated = await updateCard(deckId, card.id, {
       [side]: { ...card[side], image: path },

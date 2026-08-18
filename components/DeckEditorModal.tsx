@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Camera, Folder, Trash2, X } from "lucide-react";
 import { Deck, LANGUAGES } from "@/lib/types";
-import { fileToBytes } from "@/lib/media";
+import { compressImage, fileToBytes } from "@/lib/media";
 import { loadMediaDataUrl, saveMedia } from "@/lib/repository";
 import { nanoid } from "nanoid";
 
@@ -100,12 +100,12 @@ export function DeckEditorModal({
           setImagePreview(reader.result as string);
         };
         reader.readAsDataURL(file);
-        const { bytes, ext } = await fileToBytes(file);
+        const { bytes, ext } = await compressImage(file);
         const tempId = nanoid(8);
         (window as Window & { __pendingDeckImage?: { bytes: Uint8Array; ext: string; tempId: string } }).__pendingDeckImage = { bytes, ext, tempId };
         setImage(`__pending__${tempId}`);
       } else {
-        const { bytes, ext } = await fileToBytes(file);
+        const { bytes, ext } = await compressImage(file);
         const path = await saveMedia(deckId, "cover", "deck", "image", bytes, ext);
         setImage(path);
       }
