@@ -81,7 +81,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Flashcards"
+      "shortcutName": "Flashcards",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "publish": [
       {
