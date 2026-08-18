@@ -30,6 +30,14 @@ export async function maybeInstallSeed(): Promise<{ installed: boolean; count: n
   if (typeof window === "undefined") return { installed: false, count: 0 };
   if (await isSeedInstalled()) return { installed: false, count: 0 };
 
+  // Если синхронизация уже настроена, демо-карточки только мешают: они создают
+  // локальные данные, поверх которых git отказывается разворачивать репозиторий.
+  const { loadGitConfig } = await import("./settings");
+  if (loadGitConfig().remoteUrl) {
+    markSeedInstalled();
+    return { installed: false, count: 0 };
+  }
+
   // Если группы уже есть (например, репозиторий склонирован) — ничего не подкладываем.
   if ((await listDeckIds()).length > 0) {
     markSeedInstalled();

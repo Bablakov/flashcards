@@ -44,6 +44,82 @@ interface GithubRelease {
   assets?: { name?: string; browser_download_url?: string }[];
 }
 
+/**
+ * Скачивание APK с показом процента и запуск установки (§9.4).
+ *
+ * На Android файл кладётся в кэш приложения и открывается системным
+ * установщиком — пользователю остаётся подтвердить установку. В остальных
+ * случаях просто открываем ссылку: там обновление ставится иначе.
+ */
+export async function downloadAndInstall(
+  update: UpdateInfo,
+  onProgress?: (percent: number) => void,
+): Promise<"installing" | "opened"> {
+  const url = update.apkUrl ?? update.url;
+  let native = false;
+  try {
+    const { Capacitor } = await import("@capacitor/core");
+    native = Capacitor.isNativePlatform();
+  } catch {
+    native = false;
+  }
+  if (!native || !update.apkUrl) {
+    window.open(url, "_blank");
+    return "opened";
+  }
+
+  const response = await fetch(update.apkUrl);
+  if (!response.ok) throw new Error(`Не удалось скачать: HTTP ${response.status}`);
+  const total = Number(response.headers.get("content-length") ?? "0");
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  const reader = response.body?.getReader();
+  if (reader) {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        received += value.byteLength;
+        if (total > 0) onProgress?.(Math.round((received / total) * 100));
+      }
+    }
+  } else {
+    chunks.push(new Uint8Array(await response.arrayBuffer()));
+    onProgress?.(100);
+  }
+
+  const bytes = new Uint8Array(chunks.reduce((sum, c) => sum + c.byteLength, 0));
+  let offset = 0;
+  for (const c of chunks) {
+    bytes.set(c, offset);
+    offset += c.byteLength;
+  }
+
+  let binary = "";
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + step));
+  }
+
+  const { Filesystem, Directory } = await import("@capacitor/filesystem");
+  const fileName = `flashcards-${update.version}.apk`;
+  await Filesystem.writeFile({
+    path: fileName,
+    data: btoa(binary),
+    directory: Directory.Cache,
+  });
+  const { uri } = await Filesystem.getUri({ path: fileName, directory: Directory.Cache });
+
+  const { FileOpener } = await import("@capacitor-community/file-opener");
+  await FileOpener.open({
+    filePath: uri,
+    contentType: "application/vnd.android.package-archive",
+  });
+  return "installing";
+}
+
 export async function checkForUpdate(force = false): Promise<UpdateInfo | null> {
   if (typeof window === "undefined") return null;
   if (!force) {

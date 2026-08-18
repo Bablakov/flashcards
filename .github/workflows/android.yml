@@ -60,6 +60,17 @@ jobs:
         run: npx --yes @capacitor/assets generate --android --assetPath assets
         continue-on-error: true
 
+      # Установка обновления из самого приложения требует этого разрешения;
+      # AndroidManifest генерируется Capacitor, поэтому дописываем его в CI.
+      - name: Allow installing updates
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if ! grep -q REQUEST_INSTALL_PACKAGES "$MANIFEST"; then
+            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+</manifest>|' "$MANIFEST"
+          fi
+          grep -n "uses-permission" "$MANIFEST"
+
       # versionCode обязан расти, иначе Android не поставит обновление поверх.
       - name: Set version
         run: |

@@ -5,7 +5,7 @@ import { GitBranch, RefreshCcw, Trash2, Download, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { GitConfig, GitConfigSchema } from "@/lib/types";
 import { loadGitConfig, loadSyncStatus, saveGitConfig } from "@/lib/settings";
-import { checkAccess, clone, isInitialized, pendingChangesCount } from "@/lib/git";
+import { checkAccess, cloneFresh, hasLocalData, isInitialized, pendingChangesCount } from "@/lib/git";
 import { syncNow } from "@/lib/autosync";
 import { toast } from "@/components/Toaster";
 import { removePath } from "@/lib/fs";
@@ -81,10 +81,22 @@ export default function SettingsPage() {
 
   async function handleClone() {
     persist();
+    // Подключение заменяет локальную копию содержимым репозитория: клонировать
+    // поверх своих данных git не даст (ошибка checkout по meta.json).
+    if (await hasLocalData()) {
+      const ok = window.confirm(
+        [
+          "Карточки на этом устройстве будут заменены содержимым репозитория.",
+          "Если локальные карточки нужны — сначала сохраните их через Экспорт .fcdeck.",
+          "Продолжить?",
+        ].join("\n\n"),
+      );
+      if (!ok) return;
+    }
     setBusy(true);
     try {
-      await clone(cfg, (m) => toast(m));
-      toast("Репозиторий склонирован", "success");
+      await cloneFresh(cfg, (m) => toast(m));
+      toast("Данные загружены из репозитория", "success");
       await refresh();
     } catch (e: unknown) {
       toast(`Ошибка: ${(e as Error).message}`, "error");
@@ -256,7 +268,7 @@ export default function SettingsPage() {
               disabled={busy || !cfg.remoteUrl}
               className="pill-button bg-purple-500/20 text-purple-600 hover:bg-purple-500/30"
             >
-              <Download size={16} /> Клонировать
+              <Download size={16} /> Подключить и заменить данные
             </button>
             <button
               onClick={handleSync}

@@ -3,7 +3,7 @@
 import * as git from "isomorphic-git";
 import { gitHttp, isDesktopApp } from "./git-http";
 import { Buffer } from "buffer";
-import { getFS, REPO_ROOT, ensureRepoSkeleton, exists } from "./fs";
+import { getFS, REPO_ROOT, ensureRepoSkeleton, exists, removePath } from "./fs";
 import { GitConfig } from "./types";
 import { loadSyncStatus, saveSyncStatus } from "./settings";
 import { flashcardsMergeDriver } from "./merge";
@@ -48,6 +48,27 @@ export async function initRepo(cfg: GitConfig): Promise<void> {
   await ensureRepoSkeleton();
   if (await isInitialized()) return;
   await git.init({ fs: fsRef(), dir: REPO_ROOT, defaultBranch: cfg.branch || "main" });
+}
+
+/**
+ * Есть ли на устройстве локальные данные, которых нет в репозитории.
+ * Клонирование поверх них падает с «Your local changes would be overwritten»,
+ * поэтому этот случай нужно ловить заранее и спрашивать пользователя.
+ */
+export async function hasLocalData(): Promise<boolean> {
+  if (await isInitialized()) return false;
+  return await exists(`${REPO_ROOT}/meta.json`);
+}
+
+/**
+ * Подключение устройства к репозиторию: локальная копия заменяется тем,
+ * что лежит в репозитории. Именно этого ждут от кнопки «Клонировать»,
+ * и только так можно избежать конфликта checkout при первом подключении.
+ */
+export async function cloneFresh(cfg: GitConfig, onProgress?: (msg: string) => void): Promise<void> {
+  onProgress?.("Очищаем локальную копию...");
+  await removePath(REPO_ROOT);
+  await clone(cfg, onProgress);
 }
 
 export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void): Promise<void> {
@@ -199,6 +220,14 @@ export function explainGitError(e: unknown): string {
   if (status === 404) {
     return "404: репозиторий не найден. Проверьте адрес (должен заканчиваться на .git) и что токен выпущен именно на него.";
   }
+  if (/would be overwritten by checkout|local changes/i.test(raw)) {
+    return (
+      "На устройстве уже есть свои карточки, а репозиторий подключается впервые — " +
+      "git не станет затирать их молча. Нажмите «Подключить и заменить данные»: " +
+      "локальная копия заменится содержимым репозитория. Если локальные карточки нужны, " +
+      "сначала сохраните их через Экспорт .fcdeck."
+    );
+  }
   if (/timeout|timed out/i.test(raw)) {
     return "Превышено время ожидания сети. Проверьте интернет и попробуйте ещё раз.";
   }
@@ -227,6 +256,12 @@ export async function syncAll(
   let stage = "подготовка";
   try {
     if (!(await isInitialized())) {
+      if (await hasLocalData()) {
+        throw new Error(
+          "Репозиторий ещё не подключён, а на устройстве есть свои карточки. " +
+            "Откройте Настройки и нажмите «Подключить и заменить данные».",
+        );
+      }
       stage = "клонирование";
       await clone(cfg, onProgress);
       pulled = true;
