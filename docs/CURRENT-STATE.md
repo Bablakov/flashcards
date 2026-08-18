@@ -88,7 +88,7 @@ npx tsc --noEmit   # type check (proshyel chisto na konetz sessii)
 
 ## Memory (pamyat' assistenta dlya etogo proekta)
 
-`C:\Users\Kirill\.claude\projects\D---UsingFiles--Job--Services-flashcards-editor\memory\`
+(локальная папка памяти ассистента, вне репозитория)
 
 Aktual'nye zapisi:
 - `feedback_response_style.md` — otvechat' translitom.
