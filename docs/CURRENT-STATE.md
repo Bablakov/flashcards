@@ -1,110 +1,84 @@
-# Tekushcheye sostoyanie proekta — handoff dlya sleduyushchego chata
+# Tekushcheye sostoyanie proekta — handoff dlya sleduyushchey sessii
 
-> **Komu:** sleduyushchemu instansu Claude / pol'zovatelyu, kto vozvrashchaetsya
-> v proekt cherez paru dnej.
-> **Ot:** sessiya 2026-05-10.
-> **Pravilo proekta:** pol'zovatel' prosit otvechat' po-russki latinitsej
-> (translit). Posle vypolneniya zadach pisat' otdel'nyj `docs/YYYY-MM-DD-*.md`
-> s razdelami «chto / zachem / chto eshchyo».
+> **Ot:** sessiya 2026-08-19, versiya **1.1.0**.
+> **Pravilo proekta:** otvechat' pol'zovatelyu po-russki latinitsej (translit),
+> posle zadach pisat' `docs/YYYY-MM-DD-*.md` s razdelami «chto / zachem / chto eshchyo».
+>
+> Etot fajl do 2026-08-19 opisyval maj'skuyu versiyu s raskladkoj
+> `/repo/decks/<id>/cards.json` i komponentom `DeckCard` — nichego etogo bol'she
+> net. Esli vstretish' ssylki na nih v starykh dokumentakh, veryay kodu.
 
----
+## Chto eto
 
-## Gde ostanovilis'
+Dva prilozheniya iz odnoj kodovoy bazy: **PK** (Electron, NSIS-ustanovshchik,
+avtozapusk, trej) i **Android** (Capacitor, podpisannyy APK). Vsyo — kartochki,
+progress, nastroyki — sinhroniziruetsya cherez lichnyy privatnyy repozitoriy
+GitHub. Golosovykh funktsiy net i ne budet (resheniye 2026-08-18).
 
-Posledniy zafiksirovannyy progress — **UX-dorabotka po pyati napravleniyam**:
-karty kolod, eksport CSV, sohraneniye karty, ekran nastrojki testa, edinyy
-razmer izucha­emoj kartochki. Vsyo opisano v
-[`docs/2026-05-10-ux-improvements.md`](./2026-05-10-ux-improvements.md) —
-**eto pervyj fajl, kotoryj nuzhno prochitat'**.
+## S chego nachat' chteniye
 
-`npx tsc --noEmit` prohodit chisto. Live-test v brauzere pol'zovatel' eshchyo
-ne delal — tol'ko prosil sohranit' i opisat'.
+1. [`2026-08-18-scope-reset.md`](./2026-08-18-scope-reset.md) — spetsifikatsiya:
+   trebovaniya, format dannykh, algoritm povtoreniy, politika sinhronizatsii.
+2. [`2026-08-19-releases-and-fixes.md`](./2026-08-19-releases-and-fixes.md) —
+   razbor vsekh polevykh polomok 1.0.0 → 1.0.11 i ikh nastoyashchikh prichin.
+3. [`2026-08-19-design-overhaul.md`](./2026-08-19-design-overhaul.md) —
+   dizayn-sistema i razbor shesti ekranov (versiya 1.1.0).
 
-## Chto sdelano v etoj sessii (kratko)
+## Ustroystvo
 
-| Fajl | Smysl izmeneniya |
-|---|---|
-| `components/DeckCard.tsx` | Yarkiy gradient vmesto serogo, menyu otkryvaetsya vverh |
-| `lib/csv.ts` | Eksport s russkimi zagolovkami `Litsevaya storona` / `Obratnaya storona`; parser sovmestim so starymi CSV |
-| `app/card/page.tsx` | Dve nizhnie knopki: `Sohranit' i vernut'sya` / `Sohranit' i dobavit' eshchyo` |
-| `app/study/page.tsx` | Polnostyu pereveden na potok «ekran nastrojki -> sessiya»; kartochka zafiksirovana `60vh / min 360px` |
-| `lib/srs.ts` | Dobavlen flag `preserveOrder` dlya rezhima «po poryadku» |
-| `docs/2026-05-10-ux-improvements.md` | Detal'nyy otchyot |
+- **Next.js 15** (`output: "export"`), React 19, TypeScript strict, Tailwind 3.
+- **Format dannykh 2**, odin fayl na obyekt: `meta.json`, `settings.json`,
+  `groups/<id>.json`, `cards/<id>.json`, `media/<hash>.<ext>`,
+  `journal/<device>/<YYYY-MM>.jsonl`. Ierarkhiya — cherez `parentId`,
+  udaleniye myagkoye. Sm. `lib/model.ts` i `lib/store.ts`.
+- **Progress** — FSRS (`ts-fsrs`), sobirayetsya proigryvaniyem zhurnala
+  otvetov (`lib/progress.ts`). Urovni 1–5 vyvodyatsya iz stabil'nosti.
+- **Sinhronizatsiya** — `isomorphic-git` poverkh `lightning-fs`; transport
+  vybirayetsya po platforme v `lib/git-http.ts` (PK → IPC, Android → nativnyy
+  HTTP-plagin). **CORS-proksi ne nuzhen**, pole v nastroykakh ostayotsya pustym.
+- **Dizayn-sistema** — klassy v `app/globals.css` (`.row`, `.surface`,
+  `.section-title`, `.btn-primary`, `.segmented`, `.chip`, `.level-dot`).
+  Novyye ekrany sobirat' iz nikh, a ne pisat' svoi razmery.
 
-## Chto _ne_ sdelano (specially) i pochemu
+## Grabli, na kotorye uzhe nastupali
 
-Polnyy spisok otkrytyh voprosov — v razdele
-«**Chto eshchyo nuzhno sdelat'**» fajla
-[`2026-05-10-ux-improvements.md`](./2026-05-10-ux-improvements.md). Glavnye
-punkty:
+- **Zapis' v khranilishche nado sbrasyvat' yavno.** `lightning-fs` otkladyvayet
+  zapis' dereva katalogov na 500 ms i sbrasyvayet tajmer pri kazhdoy sleduyushchey
+  zapisi, poetomu seriya zapisey (kartochka + kartinka + obyekty git) ne
+  perezhivala perezagruzku. Kazhdaya zapis' v `lib/store.ts` zovyot `flushFs()`
+  iz `lib/fs.ts` — ne ubirat'.
+- **Global'nyy patch `fetch` ot Capacitor vyklyuchen namerenno** — on lomayet
+  dvoichnye tela git-protokola.
+- **electron-builder ne publikuyet reliz sam** (`--publish never`): on sozdaval
+  svoy chernovik, i `.exe` s `latest.yml` ne popadali v opublikovannyy reliz.
+  Fayly dokladyvayet otdel'nyy shag workflow.
 
-1. **Oblozhka kolody bol'she/zametnee** — pol'zovatel' upomyanul, no v scope
-   sessii ne voshlo. Vozmozhnye varianty: krupnye plitki na glavnoj /
-   ispol'zovat' oblozhku kak fon kartochki v rezhime testa.
-2. **Eksport s media (kartinki, audio)** — sejchas tol'ko tekst v CSV. Nado
-   pridumat' format (zip s `media/`?) ili polagat'sya na Git sync.
-3. **Mobil'naya raskladka knopok karty** — sejchas `grid-cols-1 sm:grid-cols-2`,
-   nado proverit' na real'nom telefone.
-4. **Vizual'nyj progress-bar v sessii** — sejchas tol'ko schyotchik
-   `idx + 1 / total`.
-5. **Dopolnitel'nye presety rezhima testa** (naprimer, «blits» — tol'ko Box
-   1+2 na skorost').
+## Proverki pered kommitom
 
-## Stek i vazhnye soglasheniya
-
-- **Next.js 15 + React 19**, TypeScript strict, Tailwind 3.
-- **Hranenie**: `lightning-fs` v brauzere, sinhronizatsiya cherez
-  `isomorphic-git` (CHTO U pol'zovatelya nastraivayetsya v `/settings`).
-- **Kartochki/kolody** lezhat v `/repo/decks/<deckId>/{deck.json,cards.json,media/}`.
-  Sm. `lib/repository.ts` i `lib/fs.ts`.
-- **Tipy** v `lib/types.ts` (Zod-shemy s defaults i preprocess).
-- **SRS-logika** (Leitner box 1..5) v `lib/srs.ts`.
-- **TTS** cherez Web Speech API v `lib/tts.ts`.
-- **Tema** dark/light cherez `ThemeProvider`, klassy `theme-light` / `dark`
-  na `<html>`.
-- **Yazyk obshcheniya s pol'zovatelem**: russkiy translit (sm.
-  `~/.claude/projects/.../memory/feedback_response_style.md`).
-
-## Vhodnye tochki dlya issledovaniya
-
-- Glavnaya: `app/page.tsx` -> spisok kolod (`components/DeckCard.tsx`).
-- Kolody: `app/deck/page.tsx` -> spisok kart (`components/CardPreview.tsx`).
-- Redaktor karty: `app/card/page.tsx`.
-- Test/izucheniye: `app/study/page.tsx` (dva komponenta: `StudySetup`,
-  `StudySession`).
-- Nastrojki kolody (TTS, taymingi): `app/options/page.tsx`.
-- Globalnye nastroyki + Git: `app/settings/page.tsx`.
-- Stili: `app/globals.css` (CSS vars + komponentnye klassy `deck-card`,
-  `card-tile`, `pill-button`, `field`, `menu-panel`, `flip-card/inner/face`).
-
-## Komandy razrabotki
-
-```
-npm run dev        # next dev --port 3210
-npm run build      # next build (prod)
-npm run lint       # next lint
-npx tsc --noEmit   # type check (proshyel chisto na konetz sessii)
+```bash
+npx tsc --noEmit
+npm run test:model   # 53 proverki
+npm run build
 ```
 
-## Memory (pamyat' assistenta dlya etogo proekta)
+## Vypusk versii
 
-(локальная папка памяти ассистента, вне репозитория)
+1. Podnyat' versiyu v `package.json` (i `package-lock.json`).
+2. Kommit → `git push origin main`.
+3. `git tag vX.Y.Z && git push origin vX.Y.Z` — po tegu sobirayutsya oba
+   workflow: Android APK sozdayot reliz, Desktop dokladyvayet `.exe` i `latest.yml`.
+4. Skachat' oba fayla v `Desktop\flashcards-builds\` (ustanovshchik Windows
+   bystree sobrat' lokal'no: `npm run desktop:dist`, ~2 min).
 
-Aktual'nye zapisi:
-- `feedback_response_style.md` — otvechat' translitom.
-- `feedback_session_summary_doc.md` — pisat' `docs/YYYY-MM-DD-*.md` posle
-  zadach.
+## Chto ne sdelano
 
-## Sleduyushchiy logichnyj shag
-
-Pol'zovatel' eshchyo ne provel ruchnoj test izmeneniy v brauzere. Posle togo
-kak on ego sdelaet, ozhidayem novye pravki tipa:
-- «menyu vsyo eshchyo obrezayetsya» -> proverit' `overflow` / `z-index` na
-  `.deck-card`;
-- «kartochka v teste skachet» -> ottyuningovat' procenty `35%` / `flex-1` v
-  `CardFace`;
-- novye trebovaniya iz spiska otkrytyh voprosov.
-
-Esli pol'zovatel' prosit «prodolzhi», ne pridumyvaj svoyu zadachu — pereyti
-k samomu prioritetnomu otkrytomu voprosu (oblozhka kolody krupno) i utochni
-formulirovku.
+- **Zhivoy progon dizayna na telefone** — plotnost', popadaniye po knopkam,
+  chitayemost' na solntse proveryayutsya tol'ko na ustroystve.
+- **Uvedomleniya po raspisaniyu** ni razu ne srabatyvali vzhivuyu. V nastroykakh
+  yest' knopka «Proverit' cherez 15 sekund» i stroka sostoyaniya raspisaniya —
+  eto i yest' sposob proverit'.
+- **Bokovoye derevo grupp** na shirokom ekrane — vybran variant s dvumya
+  kolonkami.
+- **Testy zapisi v IndexedDB** — proverki formata i sliyaniya yest', zapis'
+  v Node ne progonyayetsya. Otladochnyy dostup `window.__fsDebug` ostavlen
+  v rezhime razrabotki, chtoby takoye izmeryat', a ne predpolagat'.
