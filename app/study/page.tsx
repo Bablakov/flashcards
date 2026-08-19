@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Minus, RotateCcw, Settings2, X } from "lucide-react";
+import { Check, ChevronDown, Minus, Play, RotateCcw, Settings2, X } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Box, Rating } from "@/lib/types";
 import { getStudyPool, listGroupOptions, loadMediaDataUrl, rateCard, type GroupOption } from "@/lib/repository";
@@ -62,6 +62,7 @@ function StudySetup({
   const [count, setCount] = useState(0);
   const [order, setOrder] = useState<SessionOrder>("random");
   const [direction, setDirection] = useState<SessionDirection>("front");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [pool, setPool] = useState<StudyItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -106,26 +107,50 @@ function StudySetup({
     router.push(`/study?${params.toString()}`);
   }
 
+  /* Экран настройки раньше вываливал шесть блоков сразу. Теперь наверху то,
+     что меняют каждый раз (область и режим), а редкие фильтры свёрнуты —
+     их состояние видно строкой, так что ничего не теряется. */
+  const filterSummary = [
+    levels.length ? `уровни: ${levels.map((b) => BOX_LABEL[b]).join(", ")}` : null,
+    onlyErrors ? "только с ошибками" : null,
+    count > 0 ? `не больше ${count}` : null,
+    order === "random" ? null : order === "weak" ? "слабые первыми" : "по порядку",
+    direction === "front" ? null : direction === "back" ? "с обратной стороны" : "стороны вперемешку",
+  ].filter(Boolean) as string[];
+
   return (
     <>
-      <TopBar back title="Самопроверка" rightSlot={<div className="w-10" />} />
-      <main className="flex-1 space-y-4 px-4 pb-12 pt-2">
-        <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="mb-3 text-sm font-medium text-text-secondary">Область</div>
-          <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-xl bg-bg-soft px-4 py-3">
-            <input
-              type="checkbox"
-              checked={allGroups}
-              onChange={(e) => setAllGroups(e.target.checked)}
-            />
-            <span className="text-sm text-text-secondary">Все группы сразу</span>
-          </label>
+      <TopBar back title="Самопроверка" />
+      <main className="flex-1 space-y-3 px-4 pb-4 pt-3">
+        <section className="surface space-y-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="section-title">Что учим</span>
+            <span className="text-[12px] text-text-faint">
+              {loading ? "считаем..." : `созрело ${stats.due} · новых ${stats.new} · всего ${stats.total}`}
+            </span>
+          </div>
+          <div className="segmented">
+            <button
+              className="segmented-item"
+              data-active={allGroups}
+              onClick={() => setAllGroups(true)}
+            >
+              Все группы
+            </button>
+            <button
+              className="segmented-item"
+              data-active={!allGroups}
+              onClick={() => setAllGroups(false)}
+            >
+              Выбрать группы
+            </button>
+          </div>
           {!allGroups && (
-            <div className="max-h-52 space-y-1 overflow-y-auto">
+            <div className="max-h-52 space-y-0.5 overflow-y-auto">
               {groups.map((g) => (
                 <label
                   key={g.id}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-bg-soft"
+                  className="flex cursor-pointer items-center gap-2 rounded-[10px] px-2 py-2 text-[14px] hover:bg-bg-soft"
                 >
                   <input
                     type="checkbox"
@@ -135,125 +160,146 @@ function StudySetup({
                   <span className="text-text-secondary">{g.label}</span>
                 </label>
               ))}
-              <div className="px-2 pt-1 text-[11px] text-text-faint">
-                Выбранная группа берётся вместе со всеми подгруппами.
+              <div className="hint-text px-2 pt-1">
+                Группа берётся вместе со всеми подгруппами.
               </div>
             </div>
           )}
         </section>
 
-        <section className="rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-text-secondary">Режим</span>
-            <span className="text-xs text-text-faint">
-              {loading
-                ? "считаем..."
-                : `созрело ${stats.due} · новых ${stats.new} · всего ${stats.total}`}
-            </span>
-          </div>
+        <section className="surface space-y-3 py-3">
+          <div className="section-title">Режим</div>
           <div className="grid grid-cols-2 gap-2">
             {MODES.map((m) => (
               <button
                 key={m.key}
                 onClick={() => setMode(m.key)}
-                className={`rounded-xl px-3 py-2 text-left transition ${
+                className={`rounded-[10px] px-3 py-2 text-left transition ${
                   mode === m.key
-                    ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
                     : "bg-bg-soft text-text-secondary hover:bg-[var(--ring-base)]"
                 }`}
               >
-                <div className="text-sm font-semibold">{m.title}</div>
+                <div className="text-[14px] font-semibold">{m.title}</div>
                 <div className="text-[11px] opacity-80">{m.hint}</div>
               </button>
             ))}
           </div>
         </section>
 
-        <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="text-sm font-medium text-text-secondary">Часть выборки</div>
-          <div className="flex flex-wrap gap-2">
-            {([1, 2, 3, 4, 5] as Box[]).map((b) => (
-              <button
-                key={b}
-                onClick={() => toggleLevel(b)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                  levels.includes(b) ? "text-white" : "bg-bg-soft text-text-secondary"
-                }`}
-                style={levels.includes(b) ? { backgroundColor: BOX_COLORS[b] } : undefined}
-              >
-                {BOX_LABEL[b]}
-              </button>
-            ))}
-          </div>
-          <label className="flex cursor-pointer items-center gap-3 text-sm text-text-secondary">
-            <input
-              type="checkbox"
-              checked={onlyErrors}
-              onChange={(e) => setOnlyErrors(e.target.checked)}
+        <section className="surface space-y-3 py-3">
+          <button
+            className="flex w-full items-center gap-2 text-left"
+            onClick={() => setFiltersOpen((v) => !v)}
+          >
+            <span className="section-title">Фильтры</span>
+            <span className="min-w-0 flex-1 truncate text-[12px] text-text-faint">
+              {filterSummary.length ? filterSummary.join(" · ") : "без ограничений"}
+            </span>
+            <ChevronDown
+              size={16}
+              className={`flex-shrink-0 text-text-muted transition ${filtersOpen ? "rotate-180" : ""}`}
             />
-            Только те, где были ошибки
-          </label>
+          </button>
 
-          <div>
-            <div className="mb-1 text-sm text-text-secondary">Сколько карточек</div>
-            <div className="flex flex-wrap gap-2">
-              {COUNT_PRESETS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCount(c)}
-                  className={`rounded-lg px-3 py-1.5 text-xs transition ${
-                    count === c
-                      ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                      : "bg-bg-soft text-text-secondary"
-                  }`}
-                >
-                  {c === 0 ? "Все" : c}
-                </button>
-              ))}
+          {filtersOpen && (
+            <div className="space-y-3 border-t border-[var(--ring-base)] pt-3">
+              <div>
+                <div className="mb-1.5 text-[13px] text-text-secondary">Уровни запоминания</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {([1, 2, 3, 4, 5] as Box[]).map((b) => (
+                    <button
+                      key={b}
+                      onClick={() => toggleLevel(b)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                        levels.includes(b)
+                          ? "bg-[var(--bg-raised)] text-text-primary ring-1 ring-[var(--ring-strong)]"
+                          : "bg-bg-soft text-text-muted"
+                      }`}
+                    >
+                      <span className="level-dot" style={{ backgroundColor: BOX_COLORS[b] }} />
+                      {BOX_LABEL[b]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-3 text-[14px] text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={onlyErrors}
+                  onChange={(e) => setOnlyErrors(e.target.checked)}
+                />
+                Только те, где были ошибки
+              </label>
+
+              <div>
+                <div className="mb-1.5 text-[13px] text-text-secondary">Сколько карточек</div>
+                <div className="segmented">
+                  {COUNT_PRESETS.map((c) => (
+                    <button
+                      key={c}
+                      className="segmented-item"
+                      data-active={count === c}
+                      onClick={() => setCount(c)}
+                    >
+                      {c === 0 ? "Все" : c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <div className="mb-1.5 text-[13px] text-text-secondary">Порядок</div>
+                  <select
+                    value={order}
+                    onChange={(e) => setOrder(e.target.value as SessionOrder)}
+                    className="field"
+                  >
+                    <option value="random">Вперемешку</option>
+                    <option value="sequential">По порядку</option>
+                    <option value="weak">Слабые первыми</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <div className="mb-1.5 text-[13px] text-text-secondary">Сторона</div>
+                  <select
+                    value={direction}
+                    onChange={(e) => setDirection(e.target.value as SessionDirection)}
+                    className="field"
+                  >
+                    <option value="front">Вопрос → ответ</option>
+                    <option value="back">Ответ → вопрос</option>
+                    <option value="mixed">Вперемешку</option>
+                  </select>
+                </label>
+              </div>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <div className="mb-1 text-sm text-text-secondary">Порядок</div>
-              <select
-                value={order}
-                onChange={(e) => setOrder(e.target.value as SessionOrder)}
-                className="field"
-              >
-                <option value="random">Вперемешку</option>
-                <option value="sequential">По порядку</option>
-                <option value="weak">Слабые первыми</option>
-              </select>
-            </label>
-            <label className="block">
-              <div className="mb-1 text-sm text-text-secondary">Сторона</div>
-              <select
-                value={direction}
-                onChange={(e) => setDirection(e.target.value as SessionDirection)}
-                className="field"
-              >
-                <option value="front">Лицевая → обратная</option>
-                <option value="back">Обратная → лицевая</option>
-                <option value="mixed">Вперемешку</option>
-              </select>
-            </label>
-          </div>
+          )}
         </section>
 
-        <button
-          onClick={start}
-          disabled={preview === 0}
-          className="pill-button w-full justify-center bg-emerald-500/20 py-3 text-emerald-600 hover:bg-emerald-500/30 disabled:opacity-40"
-        >
-          Начать — {preview} карт.
-        </button>
         {preview === 0 && !loading && (
-          <div className="text-center text-xs text-text-faint">
+          <div className="hint-text text-center">
             Под выбранные условия карточек нет. Попробуй режим «Тренировка» или сними фильтры.
           </div>
         )}
       </main>
+
+      {/* Кнопка старта закреплена внизу: до неё не нужно доскроллить,
+          и она же показывает, сколько карточек попадёт в сессию. */}
+      <div
+        className="sticky bottom-0 z-20 mt-auto bg-bg-base/95 px-4 pt-2 backdrop-blur"
+        style={{
+          borderTop: "1px solid var(--ring-base)",
+          paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        <button onClick={start} disabled={preview === 0} className="btn-primary w-full">
+          <Play size={18} />
+          Начать — {preview} карт.
+        </button>
+      </div>
     </>
   );
 }
@@ -380,7 +426,7 @@ function StudySession({
   if (loading) {
     return (
       <>
-        <TopBar back title="Самопроверка" rightSlot={<div className="w-10" />} />
+        <TopBar back title="Самопроверка" />
         <div className="flex-1 px-4 py-12 text-center text-text-muted">Загрузка...</div>
       </>
     );
@@ -390,7 +436,7 @@ function StudySession({
     const total = stats.good + stats.neutral + stats.bad;
     return (
       <>
-        <TopBar back title={total ? "Готово!" : "Пусто"} rightSlot={<div className="w-10" />} />
+        <TopBar back title={total ? "Готово!" : "Пусто"} />
         <main className="flex-1 px-4 pb-12 pt-2">
           <div className="rounded-3xl bg-bg-card p-6 ring-1 ring-[var(--ring-base)]">
             <div className="text-center text-2xl font-semibold text-text-primary">
@@ -455,11 +501,12 @@ function StudySession({
         }
       />
       <main className="flex flex-1 flex-col px-4 pb-8 pt-2">
-        <div className="mb-2 flex items-center justify-between text-xs text-text-muted">
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
-            style={{ backgroundColor: BOX_COLORS[item.progress.box] }}
-          >
+        <div className="mb-2 flex items-center justify-between text-[12px] text-text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="level-dot"
+              style={{ backgroundColor: BOX_COLORS[item.progress.box] }}
+            />
             {BOX_LABEL[item.progress.box]}
           </span>
           <span className="text-text-faint">
@@ -468,9 +515,9 @@ function StudySession({
           </span>
         </div>
 
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-soft">
+        <div className="progress-track">
           <div
-            className="h-full rounded-full bg-[var(--accent)] transition-all"
+            className="progress-fill"
             style={{ width: `${Math.round(((idx + (done ? 1 : 0)) / queue.length) * 100)}%` }}
           />
         </div>

@@ -95,13 +95,13 @@ export function AboutBlock() {
   }
 
   return (
-    <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+    <section className="surface space-y-3">
       <div className="flex items-center gap-2">
-        <Info size={18} className="text-[var(--accent)]" />
-        <span className="text-lg font-semibold text-text-primary">О приложении</span>
+        <Info size={18} className="text-text-muted" />
+        <span className="text-[15px] font-semibold text-text-primary">О приложении</span>
       </div>
 
-      <dl className="space-y-1.5 text-sm">
+      <dl className="space-y-1.5 text-[13px]">
         <Row label="Версия" value={currentVersion()} />
         <Row label="Платформа" value={platform ?? "определяем..."} />
         <Row label="Последняя синхронизация" value={formatMoment(lastSync)} />
@@ -109,7 +109,7 @@ export function AboutBlock() {
       </dl>
 
       {lastError && (
-        <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="rounded-[14px] bg-red-500/10 px-4 py-3 text-[13px] leading-relaxed text-red-500">
           <div className="mb-1 font-medium">Последняя ошибка синхронизации</div>
           {lastError}
         </div>

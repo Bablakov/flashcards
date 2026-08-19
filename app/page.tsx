@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Plus, RefreshCcw, Search, Upload } from "lucide-react";
+import { BarChart3, Play, Plus, RefreshCcw, Search, Upload } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { DeckSummary } from "@/lib/types";
@@ -23,7 +23,7 @@ import { pendingChangesCount } from "@/lib/git";
 import { onPendingChange, onSyncStateChange, syncNow } from "@/lib/autosync";
 import { maybeInstallSeed } from "@/lib/seed";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
-import { DeckCard } from "@/components/DeckCard";
+import { GroupRow, plural } from "@/components/GroupRow";
 import { FirstRunHint } from "@/components/FirstRunHint";
 import { importPackedDeck, isPackedDeck } from "@/lib/pack";
 
@@ -213,62 +213,85 @@ export default function HomePage() {
     await refresh();
   }
 
+  const learnedTotal = decks.reduce((s, d) => s + d.learnedCount, 0);
+  const dueTotal = decks.reduce((s, d) => s + d.dueCount, 0);
+  const learnedPercent = totalCards === 0 ? 0 : Math.round((learnedTotal / totalCards) * 100);
+
   return (
     <>
-      <TopBar />
-      <main className="flex-1 px-4 pb-24 pt-2">
+      <TopBar
+        rightSlot={
+          <button className="icon-btn" onClick={handleImportDeck} aria-label="Импорт колоды из файла">
+            <Upload size={18} />
+          </button>
+        }
+      />
+      <main className="flex-1 px-4 pb-4 pt-3">
         <FirstRunHint />
-        <div className="mb-3 flex items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-[var(--ring-base)]">
-          <Search size={16} className="text-text-faint" />
+
+        {/* Строка «сколько сегодня повторять» — единственное акцентное пятно экрана. */}
+        {totalCards > 0 && (
+          <button
+            onClick={() => router.push("/study")}
+            className="mb-3 flex w-full items-center gap-3 rounded-[14px] px-4 py-3 text-left transition"
+            style={{ background: "var(--accent-soft)" }}
+          >
+            <Play size={18} className="flex-shrink-0 text-[var(--accent)]" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[15px] font-semibold text-[var(--accent)]">
+                {dueTotal > 0
+                  ? `К повторению сегодня: ${dueTotal}`
+                  : "На сегодня всё повторено"}
+              </span>
+              <span className="block text-[12px] text-text-muted">
+                {dueTotal > 0 ? "Нажми, чтобы начать" : "Можно позаниматься в режиме тренировки"}
+              </span>
+            </span>
+          </button>
+        )}
+
+        <div className="search-field mb-3">
+          <Search size={16} className="flex-shrink-0 text-text-faint" />
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Поиск колоды..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-faint"
+            placeholder="Поиск группы..."
+            className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-faint"
           />
         </div>
 
-        {decks.length > 0 && (
-          <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-            <Stat label="Колод" value={decks.length} />
-            <Stat label="Карточек" value={totalCards} />
-            <Stat
-              label="Выучено"
-              value={`${Math.round(
-                decks.reduce((s, d) => s + d.learnedCount, 0) /
-                  Math.max(1, totalCards) *
-                  100,
-              )}%`}
-            />
-          </div>
-        )}
-
         {busy && (
-          <div className="mb-3 flex items-center gap-2 rounded-xl bg-[var(--accent)]/10 px-4 py-2 text-sm text-[var(--accent)]">
-            <RefreshCcw size={14} className="animate-spin" />
+          <div className="mb-3 flex items-center gap-2 text-[12px] text-[var(--accent)]">
+            <RefreshCcw size={13} className="animate-spin" />
             Синхронизация с GitHub...
           </div>
         )}
-
         {!busy && pending > 0 && (
-          <div className="mb-3 rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-600">
-            Не синхронизировано: {pending} файлов
+          <div className="mb-3 text-[12px] text-amber-500">
+            Не синхронизировано: {plural(pending, "файл", "файла", "файлов")}
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {decks.length > 0 && (
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <span className="section-title">Группы</span>
+            <span className="text-[12px] text-text-faint">
+              {plural(totalCards, "карточка", "карточки", "карточек")} · {learnedPercent}% выучено
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {loading && (
             <div className="col-span-full py-12 text-center text-text-muted">Загрузка...</div>
           )}
           {!loading && visibleDecks.length === 0 && (
-            <div className="col-span-full py-12 text-center text-text-muted">
-              {filter
-                ? "Ничего не найдено"
-                : "Колод пока нет. Нажми «Добавить колоду»."}
+            <div className="col-span-full py-12 text-center text-[14px] text-text-muted">
+              {filter ? "Ничего не найдено" : "Групп пока нет. Нажми «Группа» внизу."}
             </div>
           )}
           {visibleDecks.map((deck) => (
-            <DeckCard
+            <GroupRow
               key={deck.id}
               deck={deck}
               onAddCard={handleAddCard}
@@ -280,16 +303,22 @@ export default function HomePage() {
       </main>
 
       <BottomActions>
-        <ActionButton icon={<Plus size={22} />} label="Группа" onClick={openCreate} />
-        <ActionButton icon={<Upload size={22} />} label="Импорт" onClick={handleImportDeck} />
         <ActionButton
-          icon={<BarChart3 size={22} />}
+          icon={<Play size={20} />}
+          label="Учить"
+          primary
+          onClick={() => router.push("/study")}
+          disabled={totalCards === 0}
+        />
+        <ActionButton icon={<Plus size={20} />} label="Группа" onClick={openCreate} />
+        <ActionButton
+          icon={<BarChart3 size={20} />}
           label="Отчёт"
           onClick={() => router.push("/report")}
         />
         <ActionButton
-          icon={<RefreshCcw size={22} className={busy ? "animate-spin" : ""} />}
-          label={busy ? "Sync..." : "Синхр."}
+          icon={<RefreshCcw size={20} className={busy ? "animate-spin" : ""} />}
+          label={busy ? "Идёт..." : "Синхр."}
           onClick={handleSync}
           disabled={busy}
         />
@@ -305,14 +334,5 @@ export default function HomePage() {
         onClose={() => setEditorOpen(false)}
       />
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-xl bg-bg-card px-3 py-2 ring-1 ring-[var(--ring-base)]">
-      <div className="text-lg font-semibold text-text-primary">{value}</div>
-      <div className="text-[11px] text-text-muted">{label}</div>
-    </div>
   );
 }

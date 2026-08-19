@@ -13,10 +13,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1a1a1a",
+  themeColor: "#171717",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  /* Экран занимает всю площадь, а нижняя панель сама отступает
+     от жестовой полосы через env(safe-area-inset-bottom). */
+  viewportFit: "cover",
 };
 
 const themeBootstrap = `
@@ -44,7 +47,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <NativeBridge />
           <DesktopBridge />
           <UpdateBanner />
-          <div className="mx-auto flex min-h-screen max-w-3xl flex-col">{children}</div>
+          {/* На телефоне колонка во всю ширину, на ПК — та же раскладка по центру,
+              но на широком экране шире, чтобы списки шли в две колонки, а не
+              оставляли половину монитора пустой. */}
+          <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col lg:max-w-5xl">
+            {children}
+          </div>
           <Toaster />
         </ThemeProvider>
       </body>

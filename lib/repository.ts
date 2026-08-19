@@ -16,7 +16,7 @@ import type { StudyItem } from "./session";
 import { recordChange, recordReview } from "./autosync";
 import { ensureReady } from "./migrate";
 import { bytesToDataUrl } from "./fs";
-import { getProgress, getProgressMap, invalidateProgress, EMPTY_PROGRESS } from "./progress";
+import { getProgress, getProgressMap, invalidateProgress, isDue, EMPTY_PROGRESS } from "./progress";
 import {
   appendJournal,
   canReparent,
@@ -136,14 +136,18 @@ export async function listGroupSummaries(parentId: string | null): Promise<DeckS
   const progress = await getProgressMap();
   const out: DeckSummary[] = [];
 
+  const now = new Date();
   for (const group of childrenOf(groups, parentId)) {
     const ids = new Set(descendantIds(groups, group.id));
     const own = cards.filter((c) => ids.has(c.groupId));
     const learned = own.filter((c) => (progress.get(c.id) ?? EMPTY_PROGRESS).box >= 4).length;
+    const due = own.filter((c) => isDue(progress.get(c.id) ?? EMPTY_PROGRESS, now)).length;
     out.push({
       ...groupToDeck(group, own.length),
       progress: own.length === 0 ? 0 : Math.round((learned / own.length) * 100),
       learnedCount: learned,
+      subgroupCount: childrenOf(groups, group.id).length,
+      dueCount: due,
     });
   }
   out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

@@ -12,15 +12,25 @@ interface TopBarProps {
   hideDefaults?: boolean;
 }
 
+/**
+ * Верхняя панель одинаковой высоты на всех экранах: 56 px, слева одна кнопка,
+ * по центру заголовок, справа не больше трёх иконок. Переключатель темы живёт
+ * только на главной и в настройках — на внутренних экранах он занимал место
+ * и мешал заголовку.
+ */
 export function TopBar({ title, back, rightSlot, hideDefaults }: TopBarProps) {
   const router = useRouter();
   const { theme, toggle } = useTheme();
+
   return (
-    <div className="sticky top-0 z-30 flex items-center justify-between bg-bg-base/95 px-3 py-3 backdrop-blur">
-      <div className="flex items-center gap-1">
+    <header
+      className="sticky top-0 z-30 flex h-14 items-center gap-1 bg-bg-base/95 px-2 backdrop-blur"
+      style={{ borderBottom: "1px solid var(--ring-base)" }}
+    >
+      <div className="flex w-10 flex-shrink-0 items-center">
         {back ? (
           <button className="icon-btn" onClick={() => router.back()} aria-label="Назад">
-            <ArrowLeft size={22} />
+            <ArrowLeft size={20} />
           </button>
         ) : (
           <button
@@ -29,36 +39,28 @@ export function TopBar({ title, back, rightSlot, hideDefaults }: TopBarProps) {
             aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
             title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
           >
-            {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         )}
       </div>
-      <div className="flex-1 truncate text-center font-display text-2xl tracking-wide text-text-primary sm:text-3xl">
-        {title ?? "FLASHCARDS"}
+
+      <div className="screen-title flex-1 text-center">
+        {title ?? <span className="tracking-[0.14em]">ФЛЕШКАРТЫ</span>}
       </div>
-      <div className="flex items-center gap-1">
+
+      <div className="flex flex-shrink-0 items-center justify-end gap-0.5">
         {rightSlot}
         {!hideDefaults && (
           <>
-            {back && (
-              <button
-                className="icon-btn"
-                onClick={toggle}
-                aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-                title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-              >
-                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-            )}
-            <Link href="/search" className="icon-btn" aria-label="Поиск">
-              <Search size={20} />
+            <Link href="/search" className="icon-btn" aria-label="Поиск по всем карточкам">
+              <Search size={18} />
             </Link>
             <Link href="/settings" className="icon-btn" aria-label="Настройки">
-              <Settings size={20} />
+              <Settings size={18} />
             </Link>
           </>
         )}
       </div>
-    </div>
+    </header>
   );
 }

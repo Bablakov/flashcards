@@ -77,6 +77,10 @@ export type Deck = z.infer<typeof DeckSchema>;
 export interface DeckSummary extends Deck {
   progress: number;
   learnedCount: number;
+  /** Прямых подгрупп внутри — чтобы строка списка сразу говорила, что группа не пустая. */
+  subgroupCount: number;
+  /** Карточек, созревших к повторению (вместе со всеми подгруппами). */
+  dueCount: number;
 }
 
 export const GitConfigSchema = z.object({

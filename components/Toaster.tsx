@@ -36,7 +36,7 @@ export function Toaster() {
       {items.map((it) => (
         <div
           key={it.id}
-          className={`pointer-events-auto w-full rounded-xl px-4 py-3 text-sm shadow-lg ${
+          className={`pointer-events-auto w-full rounded-[14px] px-4 py-3 text-[14px] shadow-[var(--shadow-float)] ${
             it.kind === "error"
               ? "bg-red-500/15 text-red-500 ring-1 ring-red-500/40"
               : it.kind === "success"

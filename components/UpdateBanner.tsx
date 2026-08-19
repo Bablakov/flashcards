@@ -64,7 +64,7 @@ export function UpdateBanner() {
     <div className="modal-backdrop" onClick={dismiss}>
       <div className="modal-panel max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[var(--ring-base)] px-5 py-3">
-          <div className="flex items-center gap-2 text-base font-semibold text-text-primary">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-text-primary">
             <Download size={18} className="text-[var(--accent)]" />
             Доступна версия {info.version}
           </div>
@@ -81,7 +81,7 @@ export function UpdateBanner() {
         <div className="space-y-4 p-5">
           {phase === "offer" && (
             <>
-              <p className="text-sm text-text-secondary">
+              <p className="text-[14px] leading-relaxed text-text-secondary">
                 Приложение скачает обновление само, а затем предложит его установить.
                 Данные и настройки останутся на месте.
               </p>
@@ -95,10 +95,10 @@ export function UpdateBanner() {
 
           {phase === "downloading" && (
             <>
-              <p className="text-sm text-text-secondary">Скачиваем обновление... {percent}%</p>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-bg-soft">
+              <p className="text-[14px] leading-relaxed text-text-secondary">Скачиваем обновление... {percent}%</p>
+              <div className="progress-track h-2">
                 <div
-                  className="h-full rounded-full bg-[var(--accent)] transition-all"
+                  className="progress-fill"
                   style={{ width: `${Math.max(3, percent)}%` }}
                 />
               </div>
@@ -106,7 +106,7 @@ export function UpdateBanner() {
           )}
 
           {phase === "installing" && (
-            <p className="text-sm text-text-secondary">
+            <p className="text-[14px] leading-relaxed text-text-secondary">
               Файл скачан. Система спросит разрешение на установку — подтвердите его,
               и приложение обновится поверх текущей версии.
             </p>
@@ -121,7 +121,7 @@ export function UpdateBanner() {
           )}
           {phase === "offer" && (
             <button
-              className="pill-button bg-[var(--accent)]/15 text-[var(--accent)]"
+              className="btn-primary py-2"
               onClick={handleInstall}
             >
               <Download size={16} /> Скачать и установить
@@ -129,7 +129,7 @@ export function UpdateBanner() {
           )}
           {phase === "installing" && (
             <button
-              className="pill-button bg-[var(--accent)]/15 text-[var(--accent)]"
+              className="btn-primary py-2"
               onClick={handleInstall}
             >
               Открыть установщик ещё раз

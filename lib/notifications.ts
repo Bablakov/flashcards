@@ -182,20 +182,89 @@ export async function rescheduleNotifications(): Promise<void> {
   }
 }
 
-/** Проверка «дойдёт ли уведомление» — кнопка в настройках. */
-export async function sendTestNotification(): Promise<boolean> {
+/**
+ * Проверка «дойдёт ли уведомление» — кнопка в настройках.
+ *
+ * Задержка нужна не для красоты: настоящая проблема на Android в том, что
+ * уведомление не приходит, когда приложение свёрнуто. Мгновенный показ этого
+ * не проверяет, а отложенный на десяток секунд — проверяет, если за это время
+ * свернуть приложение.
+ */
+export async function sendTestNotification(delaySeconds = 0): Promise<boolean> {
   const granted = await requestPermission();
   if (!granted) return false;
   const body = notificationBody(await dueCount());
+  const delayMs = Math.max(0, delaySeconds * 1000);
+
   if (await isNative()) {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
     await LocalNotifications.schedule({
       notifications: [
-        { id: 999, title: "Flashcards", body, schedule: { at: new Date(Date.now() + 3000) } },
+        {
+          id: 999,
+          title: "Flashcards",
+          body,
+          schedule: { at: new Date(Date.now() + Math.max(delayMs, 3000)), allowWhileIdle: true },
+        },
       ],
     });
     return true;
   }
+
+  if (delayMs > 0) {
+    setTimeout(() => {
+      try {
+        new Notification("Flashcards", { body });
+      } catch {
+        // уведомления могли отключить в системе
+      }
+    }, delayMs);
+    return true;
+  }
   new Notification("Flashcards", { body });
   return true;
+}
+
+export interface ScheduleInfo {
+  /** Сколько напоминаний реально зарегистрировано в системе (только Android). */
+  registered: number | null;
+  /** Ближайшее срабатывание по расписанию — считается одинаково на всех платформах. */
+  next: Date | null;
+  /** Есть ли разрешение показывать уведомления. */
+  permission: "granted" | "denied" | "unknown";
+}
+
+/**
+ * Что сейчас реально запланировано. Раньше расписание можно было проверить
+ * только дождавшись нужного дня — теперь видно сразу, зарегистрировалось оно
+ * в системе или нет.
+ */
+export async function describeSchedule(): Promise<ScheduleInfo> {
+  const settings = await readSettings();
+  const active = settings.notifications.enabled && enabledOnThisDevice();
+  const next = active ? nextOccurrence(settings.notifications.days) : null;
+
+  if (await isNative()) {
+    try {
+      const { LocalNotifications } = await import("@capacitor/local-notifications");
+      const pending = await LocalNotifications.getPending();
+      const perm = await LocalNotifications.checkPermissions();
+      return {
+        // id 999 — разовая проверка, в расписание её не считаем
+        registered: pending.notifications.filter((n) => Number(n.id) !== 999).length,
+        next,
+        permission: perm.display === "granted" ? "granted" : "denied",
+      };
+    } catch {
+      return { registered: null, next, permission: "unknown" };
+    }
+  }
+
+  const permission =
+    typeof Notification === "undefined"
+      ? "unknown"
+      : Notification.permission === "granted"
+        ? "granted"
+        : "denied";
+  return { registered: null, next, permission };
 }

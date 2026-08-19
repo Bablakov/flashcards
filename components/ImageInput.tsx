@@ -64,36 +64,47 @@ export function ImageInput({ deckId, imagePath, onPicked, onCleared, label }: Pr
 
   return (
     <div className="space-y-2">
-      <div className="text-sm font-medium text-text-secondary">{label}</div>
       {preview ? (
-        <div className="relative overflow-hidden rounded-xl bg-bg-soft ring-1 ring-[var(--ring-base)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="" className="h-48 w-full object-contain" />
-          <button
-            type="button"
-            onClick={onCleared}
-            className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
-            aria-label="Удалить"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
+        // С картинкой: она сама и есть подпись, поэтому заголовок не нужен.
+        // Кнопки под ней — «заменить» раньше не было вообще, только удаление.
+        <>
+          <div className="overflow-hidden rounded-[14px] bg-bg-soft ring-1 ring-[var(--ring-base)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview} alt="" className="max-h-48 w-full object-contain" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void pick(true)} className="pill-button">
+              <Camera size={16} /> Переснять
+            </button>
+            <button type="button" onClick={() => void pick(false)} className="pill-button">
+              <Folder size={16} /> Заменить
+            </button>
+            <button type="button" onClick={onCleared} className="pill-button text-red-500">
+              <Trash2 size={16} /> Убрать
+            </button>
+          </div>
+        </>
       ) : (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => void pick(true)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500/80 px-4 py-3 text-sm font-medium text-white transition hover:bg-indigo-500"
-          >
-            <Camera size={16} /> Камера
-          </button>
-          <button
-            type="button"
-            onClick={() => void pick(false)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500/80 px-4 py-3 text-sm font-medium text-white transition hover:bg-amber-500"
-          >
-            <Folder size={16} /> Файл
-          </button>
+        <div className="space-y-1.5">
+          <div className="section-title">{label}</div>
+          {/* Две кнопки в ряд: в одну строку с подписью они не помещались
+              на 390 px и разъезжались на две строки. */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void pick(true)}
+              className="pill-button flex-1 justify-center"
+            >
+              <Camera size={16} /> Камера
+            </button>
+            <button
+              type="button"
+              onClick={() => void pick(false)}
+              className="pill-button flex-1 justify-center"
+            >
+              <Folder size={16} /> Файл
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -142,7 +142,7 @@ export function DeckEditorModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[var(--ring-base)] px-5 py-3">
-          <div className="text-base font-semibold">{title}</div>
+          <div className="text-[15px] font-semibold">{title}</div>
           <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
             <X size={18} />
           </button>
@@ -150,7 +150,7 @@ export function DeckEditorModal({
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
           <div>
-            <div className="mb-1 text-sm font-medium text-text-secondary">Название</div>
+            <div className="mb-1 section-title">Название</div>
             <input
               autoFocus
               value={name}
@@ -162,7 +162,7 @@ export function DeckEditorModal({
 
           {parentOptions && (
             <label className="block">
-              <div className="mb-1 text-sm font-medium text-text-secondary">
+              <div className="mb-1 section-title">
                 Внутри группы
               </div>
               <select
@@ -182,72 +182,81 @@ export function DeckEditorModal({
 
           <div className="grid grid-cols-2 gap-3">
             <LanguageSelect
-              label="Лицевая (вопрос)"
+              label="Язык вопроса"
               value={frontLanguage}
               onChange={setFrontLanguage}
             />
             <LanguageSelect
-              label="Обратная (ответ)"
+              label="Язык ответа"
               value={backLanguage}
               onChange={setBackLanguage}
             />
           </div>
 
           <div>
-            <div className="mb-1 text-sm font-medium text-text-secondary">Описание (необязательно)</div>
+            <div className="mb-1 section-title">Описание — необязательно</div>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               className="field resize-none"
-              placeholder="Кратко: для чего эта колода"
+              placeholder="Кратко: для чего эта группа"
             />
           </div>
 
+          {/* Обложка и цвет — одна тема: цвет работает подложкой, пока картинки нет. */}
           <div>
-            <div className="mb-2 text-sm font-medium text-text-secondary">Обложка</div>
-            {imagePreview ? (
-              <div className="relative overflow-hidden rounded-xl bg-bg-soft ring-1 ring-[var(--ring-base)]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="" className="h-40 w-full object-contain" />
-                <button
-                  type="button"
-                  onClick={clearImage}
-                  className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
-                >
-                  <Trash2 size={14} />
-                </button>
+            <div className="mb-2 section-title">Обложка</div>
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-[14px] text-[22px] font-semibold text-white"
+                style={{ backgroundColor: imagePreview ? "transparent" : color }}
+              >
+                {imagePreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imagePreview} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  (name.trim().slice(0, 1) || "?").toUpperCase()
+                )}
               </div>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => pickImage(true)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500/80 px-4 py-3 text-sm font-medium text-white"
-                >
+              <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                <button type="button" onClick={() => pickImage(true)} className="pill-button">
                   <Camera size={16} /> Камера
                 </button>
-                <button
-                  type="button"
-                  onClick={() => pickImage(false)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500/80 px-4 py-3 text-sm font-medium text-white"
-                >
+                <button type="button" onClick={() => pickImage(false)} className="pill-button">
                   <Folder size={16} /> Файл
                 </button>
+                {imagePreview && (
+                  <button
+                    type="button"
+                    onClick={clearImage}
+                    className="pill-button text-red-500"
+                    aria-label="Убрать обложку"
+                  >
+                    <Trash2 size={16} /> Убрать
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+            <div className="hint-text mt-2">
+              Картинка ужимается до 1024 px и сохраняется в webp — репозиторий не распухает.
+              Без картинки на плитке остаётся буква на цветном фоне.
+            </div>
           </div>
 
           <div>
-            <div className="mb-2 text-sm font-medium text-text-secondary">Цвет</div>
+            <div className="mb-2 section-title">Цвет</div>
             <div className="flex flex-wrap gap-2">
               {PALETTE.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`h-8 w-8 rounded-full transition ${color === c ? "ring-2 ring-offset-2 ring-offset-bg-soft" : ""}`}
-                  style={{ backgroundColor: c, boxShadow: color === c ? `0 0 0 2px ${c}` : undefined }}
+                  className="h-8 w-8 rounded-full transition"
+                  style={{
+                    backgroundColor: c,
+                    boxShadow: color === c ? `0 0 0 2px var(--bg-card), 0 0 0 4px ${c}` : undefined,
+                  }}
                   aria-label={`Цвет ${c}`}
                 />
               ))}
@@ -259,12 +268,8 @@ export function DeckEditorModal({
           <button className="pill-button" onClick={onClose}>
             Отмена
           </button>
-          <button
-            className="pill-button bg-emerald-500/20 text-emerald-600 hover:bg-emerald-500/30"
-            onClick={handleSave}
-            disabled={!name.trim() || saving}
-          >
-            {saving ? "..." : "Сохранить"}
+          <button className="btn-primary py-2" onClick={handleSave} disabled={!name.trim() || saving}>
+            {saving ? "Сохраняю..." : "Сохранить"}
           </button>
         </div>
       </div>
@@ -283,7 +288,7 @@ function LanguageSelect({
 }) {
   return (
     <label className="block">
-      <div className="mb-1 text-sm font-medium text-text-secondary">{label}</div>
+      <div className="mb-1 section-title">{label}</div>
       <select value={value} onChange={(e) => onChange(e.target.value)} className="field">
         {LANGUAGES.map((l) => (
           <option key={l.code} value={l.code}>

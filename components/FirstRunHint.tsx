@@ -25,10 +25,10 @@ export function FirstRunHint() {
   if (!show) return null;
 
   return (
-    <section className="mb-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+    <section className="surface mb-3">
       <div className="mb-2 flex items-center gap-2">
         <GitBranch size={18} className="text-[var(--accent)]" />
-        <span className="flex-1 text-base font-semibold text-text-primary">
+        <span className="flex-1 text-[15px] font-semibold text-text-primary">
           Подключите свой репозиторий
         </span>
         <button
@@ -42,7 +42,7 @@ export function FirstRunHint() {
           <X size={16} />
         </button>
       </div>
-      <ol className="ml-4 list-decimal space-y-1 text-sm text-text-secondary">
+      <ol className="ml-4 list-decimal space-y-1 text-[13px] leading-relaxed text-text-secondary">
         <li>Создайте приватный репозиторий на GitHub (например «flashcards-data»).</li>
         <li>
           Сделайте fine-grained токен с доступом только к нему и правом
@@ -51,12 +51,12 @@ export function FirstRunHint() {
         <li>Вставьте адрес и токен в настройках и нажмите «Клонировать».</li>
         <li>На втором устройстве введите те же данные — карточки, прогресс и настройки подтянутся.</li>
       </ol>
-      <p className="mt-2 text-xs text-text-faint">
+      <p className="hint-text mt-2">
         Без этого приложение тоже работает — карточки просто останутся на этом устройстве.
       </p>
       <button
         onClick={() => router.push("/settings")}
-        className="pill-button mt-3 bg-[var(--accent)]/15 text-[var(--accent)]"
+        className="btn-primary mt-3 py-2"
       >
         Открыть настройки
       </button>

@@ -43,16 +43,16 @@ export function WeekScheduleEditor({
   }
 
   return (
-    <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+    <section className="surface space-y-3">
       <label className="flex cursor-pointer items-center justify-between gap-3">
-        <span className="text-base font-semibold text-text-primary">{title}</span>
+        <span className="text-[15px] font-semibold text-text-primary">{title}</span>
         <input
           type="checkbox"
           checked={value.enabled}
           onChange={(e) => onChange({ ...value, enabled: e.target.checked })}
         />
       </label>
-      {hint && <p className="text-xs text-text-muted">{hint}</p>}
+      {hint && <p className="hint-text">{hint}</p>}
 
       {value.enabled && (
         <div className="space-y-1.5">
@@ -60,15 +60,15 @@ export function WeekScheduleEditor({
             const time = value.days[d.key];
             const on = !!time;
             return (
-              <div key={d.key} className="flex items-center gap-3 rounded-lg bg-bg-soft px-3 py-2">
+              <div key={d.key} className="surface-flat flex items-center gap-3 px-3 py-2">
                 <input type="checkbox" checked={on} onChange={(e) => toggleDay(d.key, e.target.checked)} />
-                <span className="w-8 text-sm text-text-secondary">{d.label}</span>
+                <span className="w-8 text-[14px] text-text-secondary">{d.label}</span>
                 <input
                   type="time"
                   value={time ?? DEFAULT_TIME}
                   disabled={!on}
                   onChange={(e) => setTime(d.key, e.target.value)}
-                  className="field w-32 px-3 py-1.5 text-sm disabled:opacity-40"
+                  className="field w-32 px-3 py-1.5 text-[14px] disabled:opacity-40"
                 />
               </div>
             );

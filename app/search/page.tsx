@@ -48,34 +48,42 @@ export default function SearchPage() {
 
   return (
     <>
-      <TopBar back title="Поиск" rightSlot={<div className="w-10" />} />
-      <main className="flex-1 space-y-3 px-4 pb-12 pt-2">
-        <div className="flex items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-[var(--ring-base)]">
-          <Search size={16} className="text-text-faint" />
+      <TopBar back title="Поиск" hideDefaults />
+      <main className="flex-1 space-y-3 px-4 pb-4 pt-3">
+        <div className="search-field">
+          <Search size={16} className="flex-shrink-0 text-text-faint" />
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Поиск по всем карточкам..."
-            className="flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-faint"
+            className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary outline-none placeholder:text-text-faint"
           />
         </div>
+        {hits.length > 0 && (
+          <div className="section-title">Найдено · {hits.length}</div>
+        )}
         <div className="space-y-2">
           {hits.map((h) => (
             <Link
               key={`${h.deck.id}-${h.card.id}-${h.match}`}
               href={`/card?deck=${h.deck.id}&id=${h.card.id}`}
-              className="block rounded-xl bg-bg-card p-3 ring-1 ring-[var(--ring-base)] transition hover:ring-[var(--ring-strong)]"
+              className="row flex-col items-stretch justify-center gap-0.5 py-2.5"
             >
-              <div className="text-xs text-text-faint">
-                {h.deck.name} · {h.match === "front" ? "лицевая" : "обратная"}
-              </div>
-              <div className="mt-1 truncate text-base text-text-primary">{h.card.front.text}</div>
-              <div className="truncate text-sm text-text-muted">{h.card.back.text}</div>
+              <span className="text-[11px] text-text-faint">
+                {h.deck.name} · совпало в {h.match === "front" ? "вопросе" : "ответе"}
+              </span>
+              <span className="row-title">{h.card.front.text}</span>
+              <span className="row-meta">{h.card.back.text}</span>
             </Link>
           ))}
           {q && hits.length === 0 && (
-            <div className="py-12 text-center text-text-muted">Ничего не найдено</div>
+            <div className="py-12 text-center text-[14px] text-text-muted">Ничего не найдено</div>
+          )}
+          {!q && (
+            <div className="py-12 text-center text-[14px] text-text-muted">
+              Начни вводить — ищем по вопросу и ответу во всех группах.
+            </div>
           )}
         </div>
       </main>

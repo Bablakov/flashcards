@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, Check, Plus, Save, Trash2 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { BottomActions, ActionButton } from "@/components/BottomActions";
 import { Box, Card, Deck, languageInfo } from "@/lib/types";
 import {
   addCard,
@@ -41,6 +42,7 @@ function CardEditor() {
   const [saving, setSaving] = useState(false);
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [groupId, setGroupId] = useState(deckId);
+  const [levelOpen, setLevelOpen] = useState(false);
 
   useEffect(() => {
     if (!deckId || !cardId) {
@@ -98,17 +100,6 @@ function CardEditor() {
     setSaving(true);
     try {
       await updateCard(deckId, card.id, card);
-      toast("Сохранено", "success");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSaveAndBack() {
-    if (!card) return;
-    setSaving(true);
-    try {
-      await updateCard(deckId, card.id, card);
       router.replace(`/deck?id=${deckId}`);
     } finally {
       setSaving(false);
@@ -158,21 +149,26 @@ function CardEditor() {
     <>
       <TopBar
         back
-        title="Редактор"
+        title="Карточка"
         rightSlot={
-          <>
-            <button onClick={handleDelete} className="icon-btn text-red-500" aria-label="Удалить">
-              <Trash2 size={18} />
-            </button>
-            <button onClick={handleSave} className="pill-button" disabled={saving}>
-              <Save size={16} /> {saving ? "..." : "Сохр."}
-            </button>
-          </>
+          <button
+            onClick={handleSave}
+            className="icon-btn text-[var(--accent)]"
+            disabled={saving}
+            aria-label="Сохранить и вернуться"
+          >
+            <Check size={20} />
+          </button>
         }
       />
-      <main className="flex-1 space-y-5 px-4 pb-12 pt-2">
+      <main className="flex-1 space-y-3 px-4 pb-4 pt-3">
+        {/* Две стороны раньше шли одинаковыми блоками подряд, и было непонятно,
+            где заканчивается лицевая. Теперь у лицевой акцентная полоса слева,
+            между сторонами — стрелка «переворот». */}
         <Side
-          title="Лицевая сторона"
+          title="Вопрос"
+          subtitle="лицевая сторона"
+          accent
           lang={front}
           deckId={deckId}
           card={card}
@@ -181,8 +177,17 @@ function CardEditor() {
           onImagePicked={(f) => handleImagePicked("front", f)}
           onClearImage={() => handleClearImage("front")}
         />
+
+        <div className="flex items-center gap-2 px-1 text-text-faint">
+          <span className="h-px flex-1 bg-[var(--ring-base)]" />
+          <ArrowDown size={14} />
+          <span className="text-[11px]">переворот</span>
+          <span className="h-px flex-1 bg-[var(--ring-base)]" />
+        </div>
+
         <Side
-          title="Обратная сторона"
+          title="Ответ"
+          subtitle="обратная сторона"
           lang={back}
           deckId={deckId}
           card={card}
@@ -192,86 +197,95 @@ function CardEditor() {
           onClearImage={() => handleClearImage("back")}
         />
 
-        <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="text-sm font-medium text-text-secondary">Прогресс запоминания</div>
-          <div className="grid grid-cols-5 gap-2">
-            {([1, 2, 3, 4, 5] as Box[]).map((b) => (
-              <button
-                key={b}
-                onClick={() => setCard({ ...card, box: b })}
-                className={`flex flex-col items-center rounded-xl px-2 py-2 text-[11px] font-medium transition ${
-                  card.box === b ? "text-white" : "bg-bg-soft text-text-muted"
-                }`}
-                style={card.box === b ? { backgroundColor: BOX_COLORS[b] } : undefined}
-              >
-                <span>Bx{b}</span>
-                <span className="text-[10px] opacity-90">{BOX_LABEL[b]}</span>
-              </button>
-            ))}
+        {/* Прогресс занимал столько же места, сколько содержимое карточки.
+            Теперь это одна строка, а ручная правка уровня — по запросу. */}
+        <section className="surface space-y-3 py-3">
+          <div className="flex items-center gap-2">
+            <span className="level-dot" style={{ backgroundColor: BOX_COLORS[card.box] }} />
+            <span className="text-[14px] text-text-primary">{BOX_LABEL[card.box]}</span>
+            <span className="text-[12px] text-text-muted">
+              · {card.reviewCount} повт. · {card.goodCount} хорошо · {card.badCount} плохо
+            </span>
+            <button
+              className="ml-auto text-[12px] text-[var(--accent)]"
+              onClick={() => setLevelOpen((v) => !v)}
+            >
+              {levelOpen ? "скрыть" : "изменить"}
+            </button>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs text-text-muted">
-            <div>Повторов: {card.reviewCount}</div>
-            <div>Хорошо: {card.goodCount}</div>
-            <div>Плохо: {card.badCount}</div>
-          </div>
+          {levelOpen && (
+            <div className="grid grid-cols-5 gap-1">
+              {([1, 2, 3, 4, 5] as Box[]).map((b) => (
+                <button
+                  key={b}
+                  onClick={() => setCard({ ...card, box: b })}
+                  className={`rounded-[10px] px-1 py-2 text-[11px] font-medium transition ${
+                    card.box === b ? "text-white" : "bg-bg-soft text-text-muted"
+                  }`}
+                  style={card.box === b ? { backgroundColor: BOX_COLORS[b] } : undefined}
+                >
+                  {BOX_LABEL[b]}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
-        <section className="space-y-2">
-          <div className="text-sm font-medium text-text-secondary">Группа</div>
-          <select
-            value={groupId}
-            onChange={(e) => handleMove(e.target.value)}
-            className="field"
-          >
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.label}
-              </option>
-            ))}
-          </select>
+        <section className="surface space-y-3 py-3">
+          <label className="block">
+            <div className="mb-1 section-title">Группа</div>
+            <select value={groupId} onChange={(e) => handleMove(e.target.value)} className="field">
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <div className="mb-1 section-title">Теги через запятую</div>
+            <input
+              value={card.tags.join(", ")}
+              onChange={(e) =>
+                setCard({
+                  ...card,
+                  tags: e.target.value
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean),
+                })
+              }
+              className="field"
+              placeholder="например: бизнес, мотивация"
+            />
+          </label>
         </section>
-
-        <section className="space-y-2">
-          <div className="text-sm font-medium text-text-secondary">Теги (через запятую)</div>
-          <input
-            value={card.tags.join(", ")}
-            onChange={(e) =>
-              setCard({
-                ...card,
-                tags: e.target.value
-                  .split(",")
-                  .map((t) => t.trim())
-                  .filter(Boolean),
-              })
-            }
-            className="field"
-            placeholder="например: бизнес, мотивация"
-          />
-        </section>
-
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            onClick={handleSaveAndBack}
-            className="pill-button w-full justify-center bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25"
-            disabled={saving}
-          >
-            <ArrowLeft size={16} /> Сохранить и вернуться
-          </button>
-          <button
-            onClick={handleSaveAndAdd}
-            className="pill-button w-full justify-center bg-[var(--accent)]/15 text-[var(--accent)]"
-            disabled={saving}
-          >
-            <Plus size={16} /> Сохранить и добавить ещё
-          </button>
-        </div>
       </main>
+
+      <BottomActions>
+        <ActionButton
+          icon={<Save size={20} />}
+          label={saving ? "Сохраняю" : "Сохранить"}
+          primary
+          onClick={handleSave}
+          disabled={saving}
+        />
+        <ActionButton
+          icon={<Plus size={20} />}
+          label="Ещё карточка"
+          onClick={handleSaveAndAdd}
+          disabled={saving}
+        />
+        <ActionButton icon={<Trash2 size={20} />} label="Удалить" onClick={handleDelete} />
+      </BottomActions>
     </>
   );
 }
 
 interface SideProps {
   title: string;
+  subtitle: string;
+  accent?: boolean;
   lang: { code: string; name: string; flag: string } | null;
   deckId: string;
   card: Card;
@@ -283,6 +297,8 @@ interface SideProps {
 
 function Side({
   title,
+  subtitle,
+  accent,
   lang,
   deckId,
   card,
@@ -294,11 +310,15 @@ function Side({
   const data = card[side];
 
   return (
-    <section className="space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-      <div className="flex items-center justify-between">
-        <div className="font-display text-2xl text-text-primary">{title}</div>
+    <section
+      className="surface space-y-3 py-3"
+      style={accent ? { borderLeft: "3px solid var(--accent)" } : undefined}
+    >
+      <div className="flex items-baseline gap-2">
+        <span className="text-[15px] font-semibold text-text-primary">{title}</span>
+        <span className="text-[12px] text-text-faint">{subtitle}</span>
         {lang && (
-          <span className="lang-chip">
+          <span className="chip ml-auto">
             {lang.flag} {lang.code.toUpperCase()}
           </span>
         )}
@@ -306,9 +326,9 @@ function Side({
       <textarea
         value={data.text}
         onChange={(e) => onTextChange(e.target.value)}
-        rows={4}
-        className="field min-h-[120px] resize-y"
-        placeholder="Текст..."
+        rows={3}
+        className="field min-h-[88px] resize-y"
+        placeholder={side === "front" ? "Что спрашиваем..." : "Что должно вспомниться..."}
       />
       <ImageInput
         deckId={deckId}

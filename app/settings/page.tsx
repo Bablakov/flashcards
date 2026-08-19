@@ -22,10 +22,12 @@ import { AboutBlock } from "@/components/AboutBlock";
 import { AppSettings, AppSettingsSchema, WeekSchedule } from "@/lib/model";
 import { readSettings, writeSettings } from "@/lib/store";
 import {
+  describeSchedule,
   enabledOnThisDevice,
   rescheduleNotifications,
   sendTestNotification,
   setEnabledOnThisDevice,
+  type ScheduleInfo,
 } from "@/lib/notifications";
 
 export default function SettingsPage() {
@@ -39,6 +41,7 @@ export default function SettingsPage() {
   const [access, setAccess] = useState<string | null>(null);
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [schedule, setSchedule] = useState<ScheduleInfo | null>(null);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -46,6 +49,7 @@ export default function SettingsPage() {
     refresh();
     void readSettings().then(setApp);
     setDeviceNotifications(enabledOnThisDevice());
+    void refreshSchedule();
     // Пока идёт автоматическая синхронизация, кнопки гасим.
     const offSync = onSyncStateChange(setBusy);
     const desktop = (window as unknown as {
@@ -62,12 +66,33 @@ export default function SettingsPage() {
   async function updateApp(patch: Partial<AppSettings>) {
     const next = await writeSettings(patch);
     setApp(next);
-    if ("notifications" in patch) void rescheduleNotifications();
+    if ("notifications" in patch) {
+      void rescheduleNotifications().then(refreshSchedule);
+    }
   }
 
-  async function handleTestNotification() {
-    const ok = await sendTestNotification();
-    toast(ok ? "Тестовое уведомление отправлено" : "Уведомления запрещены в системе", ok ? "success" : "error");
+  async function handleTestNotification(delaySeconds: number) {
+    const ok = await sendTestNotification(delaySeconds);
+    if (!ok) {
+      toast("Уведомления запрещены в системе", "error");
+      return;
+    }
+    toast(
+      delaySeconds > 0
+        ? `Придёт через ${delaySeconds} секунд — сверни приложение и проверь`
+        : "Тестовое уведомление отправлено",
+      "success",
+    );
+    setTimeout(() => void refreshSchedule(), (delaySeconds + 2) * 1000);
+  }
+
+  /** Показывает, что реально зарегистрировано в системе, а не что мы попросили. */
+  async function refreshSchedule() {
+    try {
+      setSchedule(await describeSchedule());
+    } catch {
+      setSchedule(null);
+    }
   }
 
   async function refresh() {
@@ -185,12 +210,12 @@ export default function SettingsPage() {
 
   return (
     <>
-      <TopBar back title="Настройки" rightSlot={<div className="w-10" />} />
-      <main className="flex-1 px-4 pb-12 pt-2">
+      <TopBar back title="Настройки" hideDefaults />
+      <main className="flex-1 space-y-3 px-4 pb-4 pt-3">
         <AboutBlock />
 
-        <section className="mb-6 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="mb-3 text-lg font-semibold text-text-primary">Внешний вид</div>
+        <section className="surface">
+          <div className="mb-3 text-[15px] font-semibold text-text-primary">Внешний вид</div>
           <div className="flex gap-2">
             {(["dark", "light"] as const).map((t) => (
               <button
@@ -204,11 +229,11 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+        <section className="surface space-y-3">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-text-primary">
             <GitBranch size={18} /> Git синхронизация
           </div>
-          <p className="text-sm text-text-muted">
+          <p className="text-[13px] leading-relaxed text-text-muted">
             Введи URL Git-репозитория (HTTPS) и Personal Access Token. Все колоды и карточки хранятся
             в этом репозитории — обе стороны (телефон и сайт) подключаются к одному репо и
             синхронизируются.
@@ -262,25 +287,25 @@ export default function SettingsPage() {
                 spellCheck={false}
                 autoComplete="new-password"
               />
-              <p className="mt-1 text-xs text-text-faint">
+              <p className="hint-text mt-1">
                 GitHub: Settings → Developer settings → Personal access tokens (Fine-grained) →
                 доступ на запись (contents: read/write) к одному репозиторию.
               </p>
             </Field>
-            <Field label="CORS-прокси">
+            <Field label="CORS-прокси — оставьте пустым">
               <input
                 value={cfg.corsProxy}
                 onChange={(e) => update("corsProxy", e.target.value)}
                 className="field"
-                placeholder="https://your-proxy.workers.dev"
+                placeholder="не требуется"
                 spellCheck={false}
                 autoCorrect="off"
                 autoCapitalize="off"
               />
-              <p className="mt-1 text-xs text-text-faint">
-                GitHub не отдаёт CORS, поэтому синхронизация из браузера/телефона идёт через свой
-                прокси. Разверни его из папки <code>cors-proxy/</code> (Cloudflare Workers, бесплатно)
-                и вставь сюда URL. Пусто — синхронизация только нативным git с ПК.
+              <p className="hint-text mt-1">
+                Приложению на ПК и на телефоне прокси не нужен: запросы к GitHub идут мимо
+                браузерных ограничений. Поле пригодится, только если открыть приложение как
+                обычный сайт в браузере.
               </p>
             </Field>
           </div>
@@ -292,22 +317,22 @@ export default function SettingsPage() {
             <button
               onClick={handleClone}
               disabled={busy || !cfg.remoteUrl}
-              className="pill-button bg-purple-500/20 text-purple-600 hover:bg-purple-500/30"
+              className="pill-button"
             >
               <Download size={16} /> Подключить и заменить данные
             </button>
             <button
               onClick={handleSync}
               disabled={busy || !cfg.remoteUrl}
-              className="pill-button bg-emerald-500/20 text-emerald-600 hover:bg-emerald-500/30"
+              className="btn-primary py-2"
             >
               <RefreshCcw size={16} className={busy ? "animate-spin" : ""} />
-              Sync (pull + push)
+              Синхронизировать
             </button>
             <button
               onClick={handleCheckAccess}
               disabled={busy || !cfg.remoteUrl}
-              className="pill-button bg-sky-500/20 text-sky-600 hover:bg-sky-500/30"
+              className="pill-button"
             >
               Проверить доступ
             </button>
@@ -322,21 +347,21 @@ export default function SettingsPage() {
           </div>
 
           {access && (
-            <div className="rounded-xl bg-bg-soft px-4 py-3 text-sm text-text-secondary ring-1 ring-[var(--ring-base)]">
+            <div className="surface-flat px-4 py-3 text-[13px] text-text-secondary">
               {access}
             </div>
           )}
 
-          <div className="space-y-1 pt-3 text-xs text-text-muted">
+          <div className="space-y-1 pt-3 text-[12px] text-text-muted">
             <div>Локальный репозиторий: {hasRepo ? "инициализирован" : "не инициализирован"}</div>
             <div>Несинхронизированных файлов: {pending}</div>
             <div>Последняя синхронизация: {lastSync ?? "—"}</div>
           </div>
         </section>
 
-        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="text-lg font-semibold text-text-primary">Обучение</div>
-          <p className="text-xs text-text-muted">
+        <section className="surface space-y-3">
+          <div className="text-[15px] font-semibold text-text-primary">Обучение</div>
+          <p className="hint-text">
             Лимиты защищают от завала после перерыва: после недельной паузы приложение не
             вывалит все просроченные карточки сразу.
           </p>
@@ -355,7 +380,7 @@ export default function SettingsPage() {
             onChange={(v) => updateApp({ dailyReviewLimit: v })}
           />
           <label className="block">
-            <div className="mb-1 flex items-center justify-between text-sm text-text-secondary">
+            <div className="mb-1 flex items-center justify-between text-[14px] text-text-secondary">
               <span>Целевая удерживаемость</span>
               <span className="text-text-muted">{Math.round(app.retention * 100)}%</span>
             </div>
@@ -368,7 +393,7 @@ export default function SettingsPage() {
               onChange={(e) => updateApp({ retention: Number(e.target.value) })}
               className="w-full"
             />
-            <p className="mt-1 text-xs text-text-faint">
+            <p className="hint-text mt-1">
               Насколько уверенно нужно помнить материал. Выше — повторов больше, забывается меньше.
             </p>
           </label>
@@ -379,7 +404,7 @@ export default function SettingsPage() {
           />
         </section>
 
-        <div className="mb-3">
+        <div>
           <WeekScheduleEditor
             title="Напоминания"
             hint="Локальные уведомления без сервера: работают офлайн. На ПК приходят, пока приложение запущено (в трее), на телефоне — по системному расписанию."
@@ -388,7 +413,7 @@ export default function SettingsPage() {
           />
         </div>
 
-        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
+        <section className="surface space-y-3">
           <SyncToggle
             label="Показывать уведомления на этом устройстве"
             checked={deviceNotifications}
@@ -397,12 +422,49 @@ export default function SettingsPage() {
               setEnabledOnThisDevice(v);
             }}
           />
-          <p className="text-xs text-text-faint">
+          <p className="hint-text">
             Расписание общее для всех устройств, а этот тумблер — только для текущего.
           </p>
-          <button onClick={handleTestNotification} className="pill-button">
-            Проверить уведомление
-          </button>
+
+          {schedule && (
+            <div className="surface-flat space-y-1 px-4 py-3 text-[12px] text-text-muted">
+              <div>
+                Разрешение системы:{" "}
+                <span className={schedule.permission === "granted" ? "text-text-primary" : "text-red-500"}>
+                  {schedule.permission === "granted"
+                    ? "выдано"
+                    : schedule.permission === "denied"
+                      ? "запрещено"
+                      : "неизвестно"}
+                </span>
+              </div>
+              {schedule.registered !== null && (
+                <div>
+                  Зарегистрировано в системе:{" "}
+                  <span className="text-text-primary">{schedule.registered}</span>
+                </div>
+              )}
+              <div>
+                Ближайшее напоминание:{" "}
+                <span className="text-text-primary">
+                  {schedule.next ? schedule.next.toLocaleString("ru-RU") : "не запланировано"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => handleTestNotification(0)} className="pill-button">
+              Проверить сейчас
+            </button>
+            {/* Настоящая проверка: уведомление должно прийти, когда приложение свёрнуто. */}
+            <button onClick={() => handleTestNotification(15)} className="pill-button">
+              Проверить через 15 секунд
+            </button>
+            <button onClick={() => void refreshSchedule()} className="pill-button">
+              Обновить
+            </button>
+          </div>
           {isDesktop && (
             <>
               <SyncToggle
@@ -416,7 +478,7 @@ export default function SettingsPage() {
                   setAutoLaunch(next);
                 }}
               />
-              <p className="text-xs text-text-faint">
+              <p className="hint-text">
                 На ПК уведомление приходит, только пока приложение запущено. Автозапуск и трей
                 нужны, чтобы напоминания срабатывали без открытого окна.
               </p>
@@ -424,9 +486,9 @@ export default function SettingsPage() {
           )}
         </section>
 
-        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="text-lg font-semibold text-text-primary">Когда синхронизировать</div>
-          <p className="text-xs text-text-muted">
+        <section className="surface space-y-3">
+          <div className="text-[15px] font-semibold text-text-primary">Когда синхронизировать</div>
+          <p className="hint-text">
             Варианты комбинируются. Изменения коммитятся сразу и в офлайне — отправка просто
             откладывается до сети. Настройки переезжают на второе устройство сами.
           </p>
@@ -447,7 +509,7 @@ export default function SettingsPage() {
           />
         </section>
 
-        <div className="mb-6">
+        <div>
           <WeekScheduleEditor
             title="Синхронизация по расписанию"
             hint="Например, каждый день в 03:00 — приложение подтянет и отправит изменения само."
@@ -456,46 +518,49 @@ export default function SettingsPage() {
           />
         </div>
 
-        <section className="mb-6 space-y-3 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="text-lg font-semibold text-text-primary">Опасная зона</div>
+        <section className="surface space-y-3">
+          <div className="text-[15px] font-semibold text-text-primary">Опасная зона</div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleWipeToken}
               disabled={!cfg.token}
-              className="pill-button bg-amber-500/15 text-amber-600 hover:bg-amber-500/30"
+              className="pill-button"
             >
               <Trash2 size={16} /> Стереть токен
             </button>
             <button
               onClick={handleWipeRepo}
-              className="pill-button bg-red-500/15 text-red-500 hover:bg-red-500/30"
+              className="pill-button text-red-500"
             >
               <Trash2 size={16} /> Удалить локальные данные
             </button>
           </div>
-          <p className="text-xs text-text-faint">
+          <p className="hint-text">
             «Стереть токен» убирает Personal Access Token из этого устройства (на общем/чужом
             устройстве). Колоды и репозиторий остаются.
           </p>
         </section>
 
-        <section className="space-y-2 rounded-2xl bg-bg-card p-4 ring-1 ring-[var(--ring-base)]">
-          <div className="flex items-center gap-2 text-lg font-semibold text-text-primary">
+        <section className="surface space-y-2">
+          <div className="flex items-center gap-2 text-[15px] font-semibold text-text-primary">
             <Upload size={18} /> Как использовать
           </div>
-          <ol className="list-decimal space-y-1 pl-5 text-sm text-text-secondary">
-            <li>Создай пустой репозиторий на GitHub (например <code>flashcards</code>).</li>
+          <ol className="list-decimal space-y-1 pl-5 text-[13px] leading-relaxed text-text-secondary">
+            <li>Создай приватный репозиторий на GitHub (например <code>flashcards-data</code>).</li>
             <li>
               GitHub → Settings → Developer settings → Personal access tokens (Fine-grained) → создай
-              токен с правом «Contents: Read and write» на этот репо.
+              токен с правом «Contents: Read and write» на этот репозиторий. Read-only не подойдёт:
+              приложению нужно писать.
             </li>
             <li>
-              Разверни CORS-прокси из папки <code>cors-proxy/</code> (одна команда{" "}
-              <code>npx wrangler deploy</code>) и вставь его URL в поле «CORS-прокси».
+              Заполни на этой странице адрес, имя пользователя, e-mail и токен. Поле «CORS-прокси»
+              оставь пустым.
             </li>
-            <li>Вставь URL репозитория и токен на этой странице, нажми «Клонировать».</li>
-            <li>Создавай колоды/карточки — нажимай «Sync» чтобы запушить.</li>
-            <li>На другом устройстве сделай то же самое — данные подтянутся.</li>
+            <li>Нажми «Проверить доступ» — сразу видно, есть ли право записи.</li>
+            <li>
+              На первом устройстве нажми «Синхронизировать», на втором — «Подключить и заменить
+              данные», чтобы забрать всё из репозитория.
+            </li>
           </ol>
         </section>
       </main>
@@ -506,7 +571,7 @@ export default function SettingsPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1 text-sm font-medium text-text-secondary">{label}</div>
+      <div className="mb-1 section-title">{label}</div>
       {children}
     </label>
   );
@@ -522,14 +587,14 @@ function SyncToggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-bg-soft px-4 py-3 ring-1 ring-[var(--ring-base)]">
+    <label className="surface-flat flex cursor-pointer items-center gap-3 px-4 py-3">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 accent-[var(--accent)]"
       />
-      <span className="text-sm text-text-secondary">{label}</span>
+      <span className="text-[14px] text-text-secondary">{label}</span>
     </label>
   );
 }
@@ -549,14 +614,14 @@ function NumberField({
 }) {
   return (
     <label className="flex items-center justify-between gap-3">
-      <span className="text-sm text-text-secondary">{label}</span>
+      <span className="text-[14px] text-text-secondary">{label}</span>
       <input
         type="number"
         min={min}
         max={max}
         value={value}
         onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))}
-        className="field w-28 px-3 py-1.5 text-sm"
+        className="field w-28 px-3 py-1.5 text-[14px]"
       />
     </label>
   );

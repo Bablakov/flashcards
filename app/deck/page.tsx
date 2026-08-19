@@ -12,11 +12,12 @@ import {
   Sparkles,
   Pencil,
   FolderPlus,
+  ChevronRight,
   MoreHorizontal,
 } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { BottomActions, ActionButton } from "@/components/BottomActions";
-import { CardPreview } from "@/components/CardPreview";
+import { CardRow } from "@/components/CardRow";
 import { Card, Deck, DeckSummary, languageInfo } from "@/lib/types";
 import {
   addCard,
@@ -32,7 +33,7 @@ import {
   updateDeck,
   type GroupOption,
 } from "@/lib/repository";
-import { DeckCard } from "@/components/DeckCard";
+import { GroupRow, plural } from "@/components/GroupRow";
 import { toast } from "@/components/Toaster";
 import { parseCsv, cardsToCsv } from "@/lib/csv";
 import { DeckEditorModal, persistPendingDeckImage } from "@/components/DeckEditorModal";
@@ -329,20 +330,25 @@ function DeckPage() {
         }
       />
 
-      <main className="flex-1 px-4 pb-28 pt-2">
+      <main className="flex-1 px-4 pb-4 pt-3">
+        {/* Путь до группы: раньше был мелким текстом, теперь — полноценные
+            кнопки, по которым попадаешь пальцем. */}
         {crumbs.length > 0 && (
-          <nav className="mb-2 flex flex-wrap items-center gap-1 text-xs text-text-muted">
-            <button className="hover:text-text-primary" onClick={() => router.push("/")}>
+          <nav className="mb-3 flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px]">
+            <button
+              className="rounded-md px-1.5 py-0.5 text-text-muted transition hover:bg-[var(--ring-base)] hover:text-text-primary"
+              onClick={() => router.push("/")}
+            >
               Все группы
             </button>
             {crumbs.map((c, i) => (
               <span key={c.id} className="flex items-center gap-1">
-                <span className="text-text-faint">/</span>
+                <ChevronRight size={13} className="text-text-faint" />
                 {i === crumbs.length - 1 ? (
-                  <span className="text-text-primary">{c.name}</span>
+                  <span className="px-1.5 py-0.5 font-medium text-text-primary">{c.name}</span>
                 ) : (
                   <button
-                    className="hover:text-text-primary"
+                    className="rounded-md px-1.5 py-0.5 text-text-muted transition hover:bg-[var(--ring-base)] hover:text-text-primary"
                     onClick={() => router.push(`/deck?id=${c.id}`)}
                   >
                     {c.name}
@@ -354,55 +360,57 @@ function DeckPage() {
         )}
 
         {deck && (
-          <div className="mb-3 flex items-center gap-2 text-xs text-text-muted">
+          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
             {front && (
-              <span className="lang-chip">
+              <span className="chip">
                 {front.flag} {front.code.toUpperCase()}
               </span>
             )}
             <span className="text-text-faint">→</span>
             {back && (
-              <span className="lang-chip">
+              <span className="chip">
                 {back.flag} {back.code.toUpperCase()}
               </span>
             )}
-            <span className="ml-2">{deck.cardCount} карт.</span>
+            <span>{plural(deck.cardCount, "карточка", "карточки", "карточек")}</span>
             {deck.description && (
-              <span className="ml-auto truncate text-text-faint">{deck.description}</span>
+              <span className="w-full truncate text-text-faint">{deck.description}</span>
             )}
           </div>
         )}
 
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-xl bg-bg-soft px-3 py-2 ring-1 ring-[var(--ring-base)]">
-            <Search size={16} className="text-text-faint" />
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Поиск..."
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-faint"
-            />
-          </div>
+        <div className="search-field mb-3">
+          <Search size={16} className="flex-shrink-0 text-text-faint" />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Поиск по карточкам..."
+            className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-faint"
+          />
         </div>
 
         {showSort && (
-          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl bg-bg-card p-3 ring-1 ring-[var(--ring-base)]">
+          <div className="surface mb-3 grid grid-cols-2 gap-1 p-2">
             {(
               [
                 ["custom", "По умолчанию"],
                 ["shuffle", "Перемешать"],
-                ["createdAsc", "Создано ↑"],
-                ["createdDesc", "Создано ↓"],
+                ["createdAsc", "Сначала старые"],
+                ["createdDesc", "Сначала новые"],
                 ["alphaAsc", "А-Я"],
                 ["alphaDesc", "Я-А"],
-                ["boxAsc", "Слабые → сильные"],
-                ["boxDesc", "Сильные → слабые"],
+                ["boxAsc", "Слабые первыми"],
+                ["boxDesc", "Сильные первыми"],
               ] as [SortMode, string][]
             ).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setSort(k)}
-                className={`rounded-lg px-3 py-2 text-left text-sm transition ${sort === k ? "bg-[var(--accent)]/15 text-[var(--accent)]" : "text-text-secondary hover:bg-[var(--ring-base)]"}`}
+                className={`rounded-[10px] px-3 py-2 text-left text-[13px] transition ${
+                  sort === k
+                    ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                    : "text-text-secondary hover:bg-[var(--ring-base)]"
+                }`}
               >
                 {label}
               </button>
@@ -414,12 +422,10 @@ function DeckPage() {
 
         {subgroups.length > 0 && (
           <section className="mb-4">
-            <div className="mb-2 text-sm font-medium text-text-secondary">
-              Подгруппы ({subgroups.length})
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="mb-2 section-title">Подгруппы · {subgroups.length}</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {subgroups.map((g) => (
-                <DeckCard
+                <GroupRow
                   key={g.id}
                   deck={g}
                   onAddCard={handleAddCardTo}
@@ -431,17 +437,23 @@ function DeckPage() {
           </section>
         )}
 
+        {!loading && visible.length > 0 && (
+          <div className="mb-2 section-title">Карточки · {visible.length}</div>
+        )}
+
         {!loading && visible.length === 0 && (
-          <div className="py-12 text-center text-text-muted">
-            {subgroups.length > 0
-              ? "В самой группе карточек нет — они лежат в подгруппах."
-              : "Карточек нет. Нажми «Добавить» или импортируй CSV."}
+          <div className="py-12 text-center text-[14px] text-text-muted">
+            {filter
+              ? "Ничего не найдено"
+              : subgroups.length > 0
+                ? "В самой группе карточек нет — они лежат в подгруппах."
+                : "Карточек нет. Нажми «Карточка» внизу или импортируй CSV."}
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {visible.map((card) => (
-            <CardPreview
+            <CardRow
               key={card.id}
               deckId={deckId}
               card={card}
@@ -495,14 +507,15 @@ function DeckPage() {
 
       <BottomActions>
         <ActionButton
-          icon={<Play size={22} />}
-          label="Тест"
+          icon={<Play size={20} />}
+          label="Учить"
+          primary
           onClick={() => router.push(`/study?deck=${deckId}`)}
-          disabled={cards.length === 0}
+          disabled={cards.length === 0 && subgroups.length === 0}
         />
-        <ActionButton icon={<Plus size={22} />} label="Карточка" onClick={handleAdd} />
-        <ActionButton icon={<FolderPlus size={22} />} label="Подгруппа" onClick={openSubgroup} />
-        <ActionButton icon={<MoreHorizontal size={22} />} label="Ещё" onClick={() => setMoreOpen(true)} />
+        <ActionButton icon={<Plus size={20} />} label="Карточка" onClick={handleAdd} />
+        <ActionButton icon={<FolderPlus size={20} />} label="Подгруппа" onClick={openSubgroup} />
+        <ActionButton icon={<MoreHorizontal size={20} />} label="Ещё" onClick={() => setMoreOpen(true)} />
       </BottomActions>
 
       {deck && (

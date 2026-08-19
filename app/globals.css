@@ -2,33 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Дизайн-система (2026-08-19).
+ *
+ * Правила, из которых собрано всё ниже:
+ *   1. Шкала отступов — 4 / 8 / 12 / 16 / 24. Другие значения не используем.
+ *   2. Радиусы — 10 (мелочь), 14 (строки, кнопки), 18 (секции), 999 (чипы).
+ *   3. Один акцент на экран. Цвета уровней запоминания — только точки и
+ *      полоски в отчёте, они не соревнуются с акцентом за внимание.
+ *   4. Строка списка — 60 px, чтобы на телефон помещалось 5–6 штук.
+ *   5. Тёмная тема основная, светлая описана теми же переменными.
+ */
+
 @layer base {
   :root {
-    --bg-base: #1a1a1a;
-    --bg-soft: #262626;
-    --bg-card: #2d2d2d;
+    --bg-base: #171717;
+    --bg-soft: #212121;
+    --bg-card: #262626;
+    --bg-raised: #2f2f2f;
     --text-primary: #f4f4f5;
     --text-secondary: #d4d4d8;
     --text-muted: #a1a1aa;
     --text-faint: #71717a;
-    --ring-base: rgba(255, 255, 255, 0.05);
-    --ring-strong: rgba(255, 255, 255, 0.15);
-    --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --ring-base: rgba(255, 255, 255, 0.07);
+    --ring-strong: rgba(255, 255, 255, 0.16);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.45);
     --accent: #e36b6b;
+    --accent-soft: rgba(227, 107, 107, 0.16);
+    --accent-contrast: #ffffff;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
     color-scheme: dark;
   }
   :root.theme-light {
-    --bg-base: #f5f5f7;
-    --bg-soft: #ffffff;
+    --bg-base: #f2f2f5;
+    --bg-soft: #eaeaef;
     --bg-card: #ffffff;
+    --bg-raised: #ffffff;
     --text-primary: #18181b;
-    --text-secondary: #27272a;
-    --text-muted: #52525b;
-    --text-faint: #a1a1aa;
-    --ring-base: rgba(0, 0, 0, 0.06);
-    --ring-strong: rgba(0, 0, 0, 0.18);
-    --shadow-card: 0 8px 24px rgba(20, 20, 30, 0.08);
-    --accent: #d94a4a;
+    --text-secondary: #3f3f46;
+    --text-muted: #62626b;
+    --text-faint: #9494a0;
+    --ring-base: rgba(20, 20, 40, 0.08);
+    --ring-strong: rgba(20, 20, 40, 0.2);
+    --shadow-card: 0 1px 2px rgba(20, 20, 40, 0.06);
+    --shadow-float: 0 12px 32px rgba(20, 20, 40, 0.14);
+    --accent: #c93f3f;
+    --accent-soft: rgba(201, 63, 63, 0.12);
+    --accent-contrast: #ffffff;
     color-scheme: light;
   }
   html,
@@ -37,37 +60,91 @@
     color: var(--text-primary);
     height: 100%;
     -webkit-font-smoothing: antialiased;
+    /* Числа в списках и отчёте не должны «прыгать» при обновлении. */
+    font-variant-numeric: tabular-nums;
+  }
+  /* Клавиатурная навигация на ПК: видимая рамка вместо системной. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 }
 
 @layer components {
-  .deck-card {
-    @apply relative flex flex-col overflow-hidden rounded-2xl text-left transition;
-    background: var(--bg-card);
-    box-shadow: var(--shadow-card);
-    border: 1px solid var(--ring-base);
-  }
-  .deck-card:hover {
-    border-color: var(--ring-strong);
-  }
-  .card-tile {
-    @apply relative flex w-full flex-col overflow-hidden rounded-2xl text-left transition;
-    background: var(--bg-card);
-    border: 1px solid var(--ring-base);
-    min-height: 180px;
-  }
-  .card-tile:hover {
-    border-color: var(--ring-strong);
-  }
-  .icon-btn {
-    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl transition;
+  /* ---------------------------------------------------------- типографика */
+
+  /* Заголовок экрана в верхней панели. */
+  .screen-title {
+    @apply truncate text-[17px] font-semibold tracking-tight;
     color: var(--text-primary);
+  }
+  /* Подпись раздела внутри экрана: «Подгруппы», «Режим», «По группам». */
+  .section-title {
+    @apply text-[12px] font-semibold uppercase tracking-[0.06em];
+    color: var(--text-muted);
+  }
+  .row-title {
+    @apply truncate text-[15px] font-medium;
+    color: var(--text-primary);
+  }
+  .row-meta {
+    @apply truncate text-[12px];
+    color: var(--text-muted);
+  }
+  .hint-text {
+    @apply text-[12px] leading-relaxed;
+    color: var(--text-faint);
+  }
+
+  /* ------------------------------------------------------------ поверхности */
+
+  .surface {
+    @apply rounded-[18px] p-4;
+    background: var(--bg-card);
+    border: 1px solid var(--ring-base);
+  }
+  .surface-flat {
+    @apply rounded-[14px];
+    background: var(--bg-soft);
+    border: 1px solid var(--ring-base);
+  }
+
+  /* Строка списка — общая форма для групп, карточек и пунктов настроек. */
+  .row {
+    @apply flex w-full items-center gap-3 rounded-[14px] px-3 text-left transition;
+    min-height: 60px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--ring-base);
+  }
+  .row:hover {
+    border-color: var(--ring-strong);
+  }
+  .row:active {
+    transform: scale(0.995);
+  }
+  /* Квадрат слева: обложка группы или буква, если обложки нет. */
+  .row-thumb {
+    @apply flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] text-[17px] font-semibold;
+    color: #fff;
+  }
+
+  /* ---------------------------------------------------------------- кнопки */
+
+  .icon-btn {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-[10px] transition;
+    color: var(--text-secondary);
   }
   .icon-btn:hover {
     background: var(--ring-base);
+    color: var(--text-primary);
+  }
+  .icon-btn:disabled {
+    opacity: 0.4;
   }
   .pill-button {
-    @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition;
+    @apply inline-flex items-center gap-2 rounded-[14px] px-4 py-2 text-[14px] font-medium transition;
     background: var(--bg-soft);
     color: var(--text-primary);
     border: 1px solid var(--ring-base);
@@ -79,8 +156,77 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
+  /* Главное действие экрана. На экране оно ровно одно. */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-[15px] font-semibold transition;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border: 1px solid transparent;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.06);
+  }
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn-quiet {
+    @apply inline-flex items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-[15px] font-medium transition;
+    background: var(--bg-soft);
+    color: var(--text-primary);
+    border: 1px solid var(--ring-base);
+  }
+  .btn-quiet:hover {
+    border-color: var(--ring-strong);
+  }
+  .btn-quiet:disabled {
+    opacity: 0.4;
+  }
+
+  /* Переключатель из нескольких равных вариантов (режим, порядок, сторона). */
+  .segmented {
+    @apply flex gap-1 rounded-[14px] p-1;
+    background: var(--bg-soft);
+    border: 1px solid var(--ring-base);
+  }
+  .segmented-item {
+    @apply flex-1 rounded-[10px] px-3 py-2 text-center text-[13px] font-medium transition;
+    color: var(--text-muted);
+  }
+  .segmented-item:hover {
+    color: var(--text-primary);
+  }
+  .segmented-item[data-active="true"] {
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ----------------------------------------------------------- мелкие вещи */
+
+  .chip {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium;
+    background: var(--ring-base);
+    color: var(--text-secondary);
+  }
+  .chip-accent {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  /* Уровень запоминания: точка вместо цветной плашки — цвет не кричит. */
+  .level-dot {
+    @apply inline-block h-2 w-2 flex-shrink-0 rounded-full;
+  }
+  .progress-track {
+    @apply h-1 w-full overflow-hidden rounded-full;
+    background: var(--ring-base);
+  }
+  .progress-fill {
+    @apply h-full rounded-full transition-all;
+    background: var(--accent);
+  }
   .field {
-    @apply w-full rounded-xl px-4 py-3 text-base outline-none;
+    @apply w-full rounded-[14px] px-4 py-3 text-[15px] outline-none;
     background: var(--bg-soft);
     color: var(--text-primary);
     border: 1px solid var(--ring-base);
@@ -91,29 +237,36 @@
   .field:focus {
     border-color: var(--accent);
   }
-  .lang-chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium;
-    background: var(--ring-base);
-    color: var(--text-secondary);
+  /* Поле поиска — та же высота, что у строки списка, но плоское. */
+  .search-field {
+    @apply flex items-center gap-2 rounded-[14px] px-3 py-2.5;
+    background: var(--bg-soft);
+    border: 1px solid var(--ring-base);
   }
+  .search-field:focus-within {
+    border-color: var(--ring-strong);
+  }
+
+  /* --------------------------------------------------------- всплывающее */
+
   .modal-backdrop {
     @apply fixed inset-0 z-40 flex items-end justify-center bg-black/60 px-3 pb-3 backdrop-blur-sm sm:items-center sm:pb-0;
   }
   .modal-panel {
-    @apply w-full max-w-md overflow-hidden rounded-2xl;
-    background: var(--bg-soft);
+    @apply w-full max-w-md overflow-hidden rounded-[18px];
+    background: var(--bg-card);
     color: var(--text-primary);
     border: 1px solid var(--ring-base);
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-float);
   }
   .menu-panel {
-    @apply absolute z-30 w-52 overflow-hidden rounded-xl;
-    background: var(--bg-card);
+    @apply absolute z-30 w-52 overflow-hidden rounded-[14px];
+    background: var(--bg-raised);
     border: 1px solid var(--ring-base);
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-float);
   }
   .menu-item {
-    @apply flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition;
+    @apply flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] transition;
     color: var(--text-primary);
   }
   .menu-item:hover {
@@ -121,6 +274,7 @@
   }
 }
 
+/* Переворот карточки на самопроверке. */
 .flip-card {
   perspective: 1500px;
 }
@@ -140,4 +294,10 @@
 }
 .flip-face.back {
   transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flip-inner {
+    transition: none;
+  }
 }

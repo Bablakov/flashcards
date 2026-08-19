@@ -11,6 +11,7 @@ const config: Config = {
           base: "var(--bg-base)",
           soft: "var(--bg-soft)",
           card: "var(--bg-card)",
+          raised: "var(--bg-raised)",
         },
         text: {
           primary: "var(--text-primary)",
@@ -23,7 +24,20 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ['"Caveat Brush"', "system-ui", "sans-serif"],
+        /**
+         * Раньше здесь стоял «Caveat Brush», но сам шрифт нигде не подключался:
+         * ни @font-face, ни next/font — на ПК и телефоне всё это время
+         * подставлялся системный. Держим системный стек честно: он
+         * гарантированно есть офлайн, а иерархию задаём начертанием и размером.
+         */
+        display: [
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "Inter",
+          "sans-serif",
+        ],
       },
     },
   },
