@@ -72,6 +72,10 @@ export function DeckEditorModal({
   useEffect(() => {
     let active = true;
     (async () => {
+      // У новой группы ещё нет id, картинка лежит в памяти под меткой
+      // «__pending__», а превью уже показано через FileReader — сбрасывать
+      // его нельзя, иначе выбранная обложка пропадает с глаз до сохранения.
+      if (image?.startsWith("__pending__")) return;
       if (!image || !deckId) {
         setImagePreview(null);
         return;

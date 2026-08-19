@@ -221,7 +221,7 @@ export default function SettingsPage() {
               <button
                 key={t}
                 onClick={() => setTheme(t)}
-                className={`flex-1 rounded-xl px-4 py-3 text-sm font-medium transition ${theme === t ? "bg-[var(--accent)]/15 text-[var(--accent)] ring-1 ring-[var(--accent)]/40" : "bg-bg-soft text-text-secondary ring-1 ring-[var(--ring-base)]"}`}
+                className={`flex-1 rounded-[14px] px-4 py-3 text-[14px] font-medium transition ${theme === t ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "surface-flat text-text-secondary"}`}
               >
                 {t === "dark" ? "🌙 Тёмная" : "☀️ Светлая"}
               </button>

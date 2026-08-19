@@ -437,14 +437,14 @@ function StudySession({
     return (
       <>
         <TopBar back title={total ? "Готово!" : "Пусто"} />
-        <main className="flex-1 px-4 pb-12 pt-2">
-          <div className="rounded-3xl bg-bg-card p-6 ring-1 ring-[var(--ring-base)]">
-            <div className="text-center text-2xl font-semibold text-text-primary">
+        <main className="flex-1 px-4 pb-4 pt-3">
+          <div className="surface p-6">
+            <div className="text-center text-[20px] font-semibold text-text-primary">
               {total ? "Сессия завершена" : "Нет карточек под выбранные условия"}
             </div>
             {total > 0 && (
               <>
-                <div className="mt-1 text-center text-sm text-text-muted">
+                <div className="mt-1 text-center text-[13px] text-text-muted">
                   Просмотрено карточек: {total}
                   {!affectsProgress(mode) && " · прогресс не изменялся"}
                 </div>
@@ -615,7 +615,7 @@ function RateButton({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-1 rounded-2xl px-3 py-3 text-sm font-semibold text-white transition active:scale-95"
+      className="flex flex-col items-center gap-1 rounded-[14px] px-3 py-3 text-[14px] font-semibold text-white transition active:scale-95"
       style={{ backgroundColor: color }}
     >
       {icon}
@@ -626,7 +626,7 @@ function RateButton({
 
 function ResultStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="rounded-2xl bg-bg-soft px-3 py-4 ring-1 ring-[var(--ring-base)]">
+    <div className="surface-flat px-3 py-4">
       <div className="text-2xl font-semibold" style={{ color }}>
         {value}
       </div>

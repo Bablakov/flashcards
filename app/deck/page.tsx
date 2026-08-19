@@ -554,41 +554,41 @@ function DeckPage() {
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => !exporting && setExportOpen(false)}>
           <div className="modal-panel max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="border-b border-[var(--ring-base)] px-5 py-3 text-base font-semibold">
-              Экспорт колоды
+            <div className="border-b border-[var(--ring-base)] px-5 py-3 text-[15px] font-semibold">
+              Экспорт группы
             </div>
             <div className="space-y-3 p-5">
               <button
                 onClick={handleExportCsv}
                 disabled={exporting}
-                className="w-full rounded-xl bg-bg-soft p-4 text-left ring-1 ring-[var(--ring-base)] hover:bg-[var(--ring-base)] disabled:opacity-50"
+                className="surface-flat w-full p-4 text-left hover:border-[var(--ring-strong)] disabled:opacity-50"
               >
-                <div className="text-sm font-semibold text-text-primary">CSV (только текст)</div>
-                <div className="mt-1 text-xs text-text-muted">
+                <div className="text-[14px] font-semibold text-text-primary">CSV (только текст)</div>
+                <div className="hint-text mt-1">
                   Excel-совместимый. Картинки и аудио не сохраняются.
                 </div>
               </button>
               <button
                 onClick={() => handleExportPack(false)}
                 disabled={exporting}
-                className="w-full rounded-xl bg-bg-soft p-4 text-left ring-1 ring-[var(--ring-base)] hover:bg-[var(--ring-base)] disabled:opacity-50"
+                className="surface-flat w-full p-4 text-left hover:border-[var(--ring-strong)] disabled:opacity-50"
               >
-                <div className="text-sm font-semibold text-text-primary">
+                <div className="text-[14px] font-semibold text-text-primary">
                   {FCDECK_FORMAT} — только текст (.fcdeck)
                 </div>
-                <div className="mt-1 text-xs text-text-muted">
+                <div className="hint-text mt-1">
                   Полные данные карточек (теги, прогресс), без медиа.
                 </div>
               </button>
               <button
                 onClick={() => handleExportPack(true)}
                 disabled={exporting}
-                className="w-full rounded-xl bg-indigo-500/15 p-4 text-left ring-1 ring-indigo-500/30 hover:bg-indigo-500/25 disabled:opacity-50"
+                className="surface-flat w-full p-4 text-left hover:border-[var(--ring-strong)] disabled:opacity-50"
               >
-                <div className="text-sm font-semibold text-indigo-600">
+                <div className="text-[14px] font-semibold text-[var(--accent)]">
                   Полный пакет с картинками (.fcdeck)
                 </div>
-                <div className="mt-1 text-xs text-text-muted">
+                <div className="hint-text mt-1">
                   Один файл со всеми картинками и аудио. Может быть большим.
                 </div>
               </button>

@@ -48,18 +48,18 @@ export function DesktopBridge() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 flex items-center gap-3 bg-[var(--accent)] px-4 py-3 text-white shadow-lg">
       <Download size={18} />
-      <span className="flex-1 text-sm">
+      <span className="flex-1 text-[14px]">
         Готова версия {updateVersion}. Перезапустить приложение и обновиться?
       </span>
       <button
         onClick={() => api()?.installUpdate()}
-        className="rounded-full bg-white/20 px-4 py-1.5 text-sm font-semibold hover:bg-white/30"
+        className="rounded-full bg-white/20 px-4 py-1.5 text-[14px] font-semibold hover:bg-white/30"
       >
         Обновить
       </button>
       <button
         onClick={() => setUpdateVersion(null)}
-        className="rounded-full px-3 py-1.5 text-sm opacity-80 hover:opacity-100"
+        className="rounded-full px-3 py-1.5 text-[14px] opacity-80 hover:opacity-100"
       >
         Позже
       </button>
