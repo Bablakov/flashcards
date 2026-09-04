@@ -396,12 +396,21 @@ function StudySession({
   function onPointerDown(e: React.PointerEvent) {
     swipeStart.current = { x: e.clientX, y: e.clientY, t: Date.now() };
   }
+  function onPointerCancel() {
+    swipeStart.current = null;
+  }
   function onPointerUp(e: React.PointerEvent) {
     const start = swipeStart.current;
     swipeStart.current = null;
     if (!start) return;
-    const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
-    if (dist > 40 || (Date.now() - start.t < 350 && dist < 12)) setFlipped((f) => !f);
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const dist = Math.hypot(dx, dy);
+    const tap = Date.now() - start.t < 350 && dist < 12;
+    // Переворачиваем только по горизонтальному свайпу: вертикальный — это
+    // прокрутка длинного текста, и карточка не должна на неё переворачиваться.
+    const swipe = Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy);
+    if (tap || swipe) setFlipped((f) => !f);
   }
 
   async function rate(rating: Rating) {
@@ -527,6 +536,7 @@ function StudySession({
           style={{ height: "58vh", minHeight: 340 }}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
         >
           <div className={`flip-inner h-full w-full ${flipped ? "flipped" : ""}`}>
             <CardFace
@@ -568,6 +578,17 @@ function StudySession({
   );
 }
 
+// Короткий вопрос читается крупно по центру, статья на несколько экранов —
+// нет: 30-м кеглем она превращается в бесконечную прокрутку.
+function textScale(text: string) {
+  const n = text.trim().length;
+  if (n <= 90) return "text-center text-3xl";
+  if (n <= 220) return "text-center text-2xl";
+  if (n <= 600) return "text-left text-xl";
+  if (n <= 1500) return "text-left text-lg";
+  return "text-left text-base";
+}
+
 function CardFace({
   text,
   imageUrl,
@@ -589,9 +610,16 @@ function CardFace({
           <img src={imageUrl} alt="" className="max-h-full max-w-full object-contain" />
         </div>
       )}
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">
-        <div className="whitespace-pre-wrap break-words text-center text-3xl font-semibold leading-snug text-text-primary">
-          {text || <span className="text-text-faint">пусто</span>}
+      {/* Центрируем обёрткой min-h-full, а не items-center: у флекса с
+          выравниванием по центру текст выше контейнера уезжает вверх за начало
+          прокрутки, и его первые строки нельзя ни увидеть, ни домотать. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="flex min-h-full flex-col justify-center">
+          <div
+            className={`whitespace-pre-wrap break-words font-semibold leading-snug text-text-primary ${textScale(text)}`}
+          >
+            {text || <span className="text-text-faint">пусто</span>}
+          </div>
         </div>
       </div>
       <div className="mt-3 flex items-center justify-end text-[11px] text-text-faint">
