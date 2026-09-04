@@ -379,6 +379,19 @@ function DeckPage() {
           </div>
         )}
 
+        {/* Явный вход в тест по этой группе. Раньше единственной дверью была
+            иконка «Учить» в нижней панели, и с экрана группы было не видно,
+            что тест вообще можно настроить под себя. */}
+        <button
+          onClick={() => router.push(`/study?deck=${deckId}`)}
+          disabled={!deck || deck.cardCount === 0}
+          className="btn-primary mb-3 w-full"
+        >
+          <Play size={18} />
+          Пройти тест
+          {deck && deck.cardCount > 0 ? ` — ${deck.cardCount} карт.` : ""}
+        </button>
+
         <div className="search-field mb-3">
           <Search size={16} className="flex-shrink-0 text-text-faint" />
           <input
@@ -431,6 +444,7 @@ function DeckPage() {
                   onAddCard={handleAddCardTo}
                   onEdit={(id) => router.push(`/deck?id=${id}`)}
                   onDelete={handleDeleteSubgroup}
+                  onStudy={(id) => router.push(`/study?deck=${id}`)}
                 />
               ))}
             </div>

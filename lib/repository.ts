@@ -16,7 +16,14 @@ import type { StudyItem } from "./session";
 import { recordChange, recordReview } from "./autosync";
 import { ensureReady } from "./migrate";
 import { bytesToDataUrl } from "./fs";
-import { getProgress, getProgressMap, invalidateProgress, isDue, EMPTY_PROGRESS } from "./progress";
+import {
+  getProgress,
+  getProgressMap,
+  invalidateProgress,
+  isDue,
+  isNew,
+  EMPTY_PROGRESS,
+} from "./progress";
 import {
   appendJournal,
   canReparent,
@@ -177,6 +184,61 @@ export async function listGroupOptions(excludeSubtreeOf?: string): Promise<Group
     for (const g of childrenOf(groups, parentId)) {
       if (excluded.has(g.id)) continue;
       out.push({ id: g.id, label: `${"— ".repeat(depth)}${g.name}`, depth });
+      walk(g.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+export interface StudyGroupNode {
+  id: string;
+  name: string;
+  depth: number;
+  parentId: string | null;
+  /** Карточек вместе со всеми подгруппами. */
+  cards: number;
+  /** Из них созрело к повторению. */
+  due: number;
+  /** Из них ещё ни разу не показывались. */
+  fresh: number;
+}
+
+/**
+ * Дерево групп со счётчиками — для экрана настройки самопроверки.
+ *
+ * От `listGroupOptions` отличается тем, что отдаёт разбор по карточкам:
+ * выбирая подгруппу, сразу видно, сколько в ней всего и сколько созрело,
+ * иначе выбор области идёт вслепую.
+ */
+export async function listStudyGroupTree(): Promise<StudyGroupNode[]> {
+  const groups = await allGroups();
+  const cards = await allCards();
+  const progress = await getProgressMap();
+  const now = new Date();
+
+  const byGroup = new Map<string, CardContent[]>();
+  for (const c of cards) {
+    const list = byGroup.get(c.groupId);
+    if (list) list.push(c);
+    else byGroup.set(c.groupId, [c]);
+  }
+
+  const out: StudyGroupNode[] = [];
+  const walk = (parentId: string | null, depth: number) => {
+    for (const g of childrenOf(groups, parentId)) {
+      let total = 0;
+      let due = 0;
+      let fresh = 0;
+      for (const id of descendantIds(groups, g.id)) {
+        for (const c of byGroup.get(id) ?? []) {
+          const p = progress.get(c.id) ?? EMPTY_PROGRESS;
+          total++;
+          if (isNew(p)) fresh++;
+          else if (isDue(p, now)) due++;
+        }
+      }
+      out.push({ id: g.id, name: g.name, depth, parentId, cards: total, due, fresh });
       walk(g.id, depth + 1);
     }
   };
@@ -402,12 +464,18 @@ export async function updateCard(
     invalidateCache();
   }
 
-  // Уровень и счётчики — это не содержимое, а прогресс: он живёт в журнале.
+  /* Уровень и счётчики — это не содержимое, а прогресс: он живёт в журнале.
+     Сравниваем с текущим состоянием, а не просто смотрим на наличие полей:
+     редактор отдаёт карточку целиком, поэтому «сохранить» после правки текста
+     раньше писало в журнал установку уровня. Событие `set` переводит карточку
+     в состояние «повторение» и отодвигает срок, так что карточка навсегда
+     переставала быть новой, а до повторения ждала лишний интервал. */
+  const before = await getProgress(cardId);
   const touchesProgress =
-    patch.box !== undefined ||
-    patch.goodCount !== undefined ||
-    patch.badCount !== undefined ||
-    patch.reviewCount !== undefined;
+    (patch.box !== undefined && patch.box !== before.box) ||
+    (patch.goodCount !== undefined && patch.goodCount !== before.goodCount) ||
+    (patch.badCount !== undefined && patch.badCount !== before.badCount) ||
+    (patch.reviewCount !== undefined && patch.reviewCount !== before.reviewCount);
 
   if (touchesProgress) {
     await appendJournal([

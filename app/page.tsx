@@ -297,6 +297,7 @@ export default function HomePage() {
               onAddCard={handleAddCard}
               onEdit={openEdit}
               onDelete={handleDelete}
+              onStudy={(id) => router.push(`/study?deck=${id}`)}
             />
           ))}
         </div>

@@ -5,7 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Minus, Play, RotateCcw, Settings2, X } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Box, Rating } from "@/lib/types";
-import { getStudyPool, listGroupOptions, loadMediaDataUrl, rateCard, type GroupOption } from "@/lib/repository";
+import {
+  getStudyPool,
+  listStudyGroupTree,
+  loadMediaDataUrl,
+  rateCard,
+  type StudyGroupNode,
+} from "@/lib/repository";
 import { BOX_COLORS, BOX_LABEL } from "@/lib/srs";
 import { readSettings } from "@/lib/store";
 import {
@@ -53,7 +59,7 @@ function StudySetup({
   router: ReturnType<typeof useRouter>;
 }) {
   const deckId = sp.get("deck") ?? "";
-  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [groups, setGroups] = useState<StudyGroupNode[]>([]);
   const [selected, setSelected] = useState<string[]>(deckId ? [deckId] : []);
   const [allGroups, setAllGroups] = useState(!deckId);
   const [mode, setMode] = useState<SessionMode>("review");
@@ -68,7 +74,7 @@ function StudySetup({
 
   useEffect(() => {
     (async () => {
-      setGroups(await listGroupOptions());
+      setGroups(await listStudyGroupTree());
     })();
   }, []);
 
@@ -88,6 +94,41 @@ function StudySetup({
     () => buildSession(pool, { mode, levels, onlyErrors, count, order }).length,
     [pool, mode, levels, onlyErrors, count, order],
   );
+
+  /* Сколько карточек даст каждый режим при текущей области и фильтрах.
+     Без этих чисел выбор режима — гадание: «Повторение» может оказаться
+     пустым просто потому, что сегодня ничего не созрело. Порядок здесь
+     нарочно «по порядку»: считаем количество, перемешивать незачем. */
+  const modeCounts = useMemo(() => {
+    const out = {} as Record<SessionMode, number>;
+    for (const m of MODES) {
+      out[m.key] = buildSession(pool, {
+        mode: m.key,
+        levels,
+        onlyErrors,
+        order: "sequential",
+      }).length;
+    }
+    return out;
+  }, [pool, levels, onlyErrors]);
+
+  /** Потомки выбранных групп — они попадают в тест сами, отдельной галочки не требуют. */
+  const covered = useMemo(() => {
+    const parentOf = new Map(groups.map((g) => [g.id, g.parentId]));
+    const chosen = new Set(selected);
+    const out = new Set<string>();
+    for (const g of groups) {
+      let p = g.parentId;
+      while (p) {
+        if (chosen.has(p)) {
+          out.add(g.id);
+          break;
+        }
+        p = parentOf.get(p) ?? null;
+      }
+    }
+    return out;
+  }, [groups, selected]);
 
   function toggleGroup(id: string) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -113,7 +154,6 @@ function StudySetup({
   const filterSummary = [
     levels.length ? `уровни: ${levels.map((b) => BOX_LABEL[b]).join(", ")}` : null,
     onlyErrors ? "только с ошибками" : null,
-    count > 0 ? `не больше ${count}` : null,
     order === "random" ? null : order === "weak" ? "слабые первыми" : "по порядку",
     direction === "front" ? null : direction === "back" ? "с обратной стороны" : "стороны вперемешку",
   ].filter(Boolean) as string[];
@@ -146,22 +186,60 @@ function StudySetup({
             </button>
           </div>
           {!allGroups && (
-            <div className="max-h-52 space-y-0.5 overflow-y-auto">
-              {groups.map((g) => (
-                <label
-                  key={g.id}
-                  className="flex cursor-pointer items-center gap-2 rounded-[10px] px-2 py-2 text-[14px] hover:bg-bg-soft"
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[12px]">
+                <button
+                  className="rounded-full bg-bg-soft px-3 py-1 text-text-secondary transition hover:bg-[var(--ring-base)]"
+                  onClick={() => setSelected(groups.filter((g) => g.depth === 0).map((g) => g.id))}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(g.id)}
-                    onChange={() => toggleGroup(g.id)}
-                  />
-                  <span className="text-text-secondary">{g.label}</span>
-                </label>
-              ))}
-              <div className="hint-text px-2 pt-1">
-                Группа берётся вместе со всеми подгруппами.
+                  Выбрать все
+                </button>
+                <button
+                  className="rounded-full bg-bg-soft px-3 py-1 text-text-secondary transition hover:bg-[var(--ring-base)]"
+                  onClick={() => setSelected([])}
+                >
+                  Снять
+                </button>
+                <span className="ml-auto text-text-faint">выбрано: {selected.length}</span>
+              </div>
+
+              {/* Дерево целиком: любую подгруппу можно взять отдельно, не забирая
+                  соседей. Числа справа — всего карточек и сколько созрело, иначе
+                  область выбирается вслепую. */}
+              <div className="max-h-64 space-y-0.5 overflow-y-auto overscroll-contain">
+                {groups.map((g) => {
+                  const included = covered.has(g.id);
+                  return (
+                    <label
+                      key={g.id}
+                      style={{ paddingLeft: `${8 + g.depth * 18}px` }}
+                      className={`flex items-center gap-2 rounded-[10px] py-2 pr-2 text-[14px] hover:bg-bg-soft ${
+                        included ? "opacity-60" : "cursor-pointer"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={included || selected.includes(g.id)}
+                        disabled={included}
+                        onChange={() => toggleGroup(g.id)}
+                      />
+                      <span className="min-w-0 flex-1 truncate text-text-secondary">{g.name}</span>
+                      {included && <span className="text-[11px] text-text-faint">входит</span>}
+                      {g.due > 0 && (
+                        <span className="chip chip-accent" title="Созрело к повторению">
+                          {g.due}
+                        </span>
+                      )}
+                      <span className="w-10 text-right text-[12px] text-text-faint" title="Всего карточек">
+                        {g.cards}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="hint-text px-2">
+                Выбранная группа берётся вместе с подгруппами — они помечаются «входит».
+                Чтобы взять только одну подгруппу, отметь её саму.
               </div>
             </div>
           )}
@@ -180,11 +258,55 @@ function StudySetup({
                     : "bg-bg-soft text-text-secondary hover:bg-[var(--ring-base)]"
                 }`}
               >
-                <div className="text-[14px] font-semibold">{m.title}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[14px] font-semibold">{m.title}</span>
+                  <span className="ml-auto text-[12px] tabular-nums opacity-70">
+                    {loading ? "…" : modeCounts[m.key]}
+                  </span>
+                </div>
                 <div className="text-[11px] opacity-80">{m.hint}</div>
               </button>
             ))}
           </div>
+        </section>
+
+        {/* Сколько карточек — вопрос, который задают каждый раз, поэтому он
+            на виду, а не внутри свёрнутых фильтров. */}
+        <section className="surface space-y-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="section-title">Сколько карточек</span>
+            <span className="text-[12px] text-text-faint">
+              {loading ? "считаем..." : `доступно ${modeCounts[mode]}`}
+            </span>
+          </div>
+          <div className="segmented">
+            {COUNT_PRESETS.map((c) => (
+              <button
+                key={c}
+                className="segmented-item"
+                data-active={count === c}
+                onClick={() => setCount(c)}
+              >
+                {c === 0 ? "Все" : c}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-[13px] text-text-secondary">
+            <span className="flex-shrink-0">Своё число</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={999}
+              value={count > 0 && !COUNT_PRESETS.includes(count) ? count : ""}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setCount(Number.isFinite(n) && n > 0 ? Math.min(999, Math.floor(n)) : 0);
+              }}
+              placeholder="напр. 15"
+              className="field w-28"
+            />
+          </label>
         </section>
 
         <section className="surface space-y-3 py-3">
@@ -232,22 +354,6 @@ function StudySetup({
                 />
                 Только те, где были ошибки
               </label>
-
-              <div>
-                <div className="mb-1.5 text-[13px] text-text-secondary">Сколько карточек</div>
-                <div className="segmented">
-                  {COUNT_PRESETS.map((c) => (
-                    <button
-                      key={c}
-                      className="segmented-item"
-                      data-active={count === c}
-                      onClick={() => setCount(c)}
-                    >
-                      {c === 0 ? "Все" : c}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="block">

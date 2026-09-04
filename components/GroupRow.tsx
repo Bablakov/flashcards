@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, MoreVertical, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { DeckSummary } from "@/lib/types";
 import { loadMediaDataUrl } from "@/lib/repository";
 
@@ -20,9 +20,11 @@ interface Props {
   onAddCard: (deckId: string) => void;
   onEdit: (deckId: string) => void;
   onDelete: (deckId: string) => void;
+  /** Тест по этой группе, не заходя внутрь. */
+  onStudy?: (deckId: string) => void;
 }
 
-export function GroupRow({ deck, onAddCard, onEdit, onDelete }: Props) {
+export function GroupRow({ deck, onAddCard, onEdit, onDelete, onStudy }: Props) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -93,6 +95,17 @@ export function GroupRow({ deck, onAddCard, onEdit, onDelete }: Props) {
         </button>
         {menuOpen && (
           <div className="menu-panel right-0 top-full mt-1">
+            {onStudy && deck.cardCount > 0 && (
+              <button
+                className="menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onStudy(deck.id);
+                }}
+              >
+                <Play size={16} /> Пройти тест
+              </button>
+            )}
             <button
               className="menu-item"
               onClick={() => {
