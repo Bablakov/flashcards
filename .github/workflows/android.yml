@@ -34,8 +34,13 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      # По умолчанию действие ставит пакеты «tools platform-tools», но пакета
+      # «tools» в cmdline-tools 16 больше нет — sdkmanager падал на нём
+      # (с 2026-10-06 так ломалась любая сборка). Нужен только platform-tools.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools"
 
       - name: Install dependencies
         run: npm ci
