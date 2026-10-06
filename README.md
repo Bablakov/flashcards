@@ -71,9 +71,13 @@ journal/<deviceId>/<YYYY-MM>.jsonl   ответы, только дописыва
 | **Windows** | Electron, установщик NSIS с выбором пути, трей, автозапуск, автообновление | запросы идут из главного процесса — браузерного CORS нет |
 | **Android** | Capacitor 7, подписанный APK | нативный HTTP-плагин, тоже мимо CORS |
 | **iOS** | Capacitor 7, неподписанный IPA — ставится через Sideloadly | тот же нативный HTTP-плагин |
-| **Браузер** | статический экспорт Next.js, PWA | нужен свой CORS-прокси (папка `cors-proxy/`) |
+| **Сайт** | статический экспорт Next.js на GitHub Pages, PWA с офлайн-кэшем | через GitHub API (`lib/github-api-transport.ts`) — без прокси |
 
 ## Установка
+
+Без установки: сайт **https://bablakov.github.io/flashcards/** — на iPhone
+Safari → «Поделиться» → «На экран „Домой“» (подробно — в
+[SETUP-USER.md](./SETUP-USER.md#сайт--iphone-без-установки)).
 
 Готовые сборки — на странице [Releases](../../releases): `.exe` для Windows,
 `.apk` для Android и `.ipa` для iPhone (как его поставить — в конце
@@ -88,6 +92,8 @@ npm install
 npm run dev          # веб-версия на http://localhost:3210
 npm run test:model   # 47 проверок: FSRS, сборка сессии, слияние, дерево групп
 npm run build        # статический экспорт в out/
+npm run build:web    # то же для GitHub Pages: подпапка /flashcards + service worker
+npm run test:github  # транспорт через GitHub API на настоящем репозитории (--write — с записью во временную ветку)
 npm run desktop      # запустить ПК-версию (Electron)
 npm run desktop:dist # собрать установщик в dist-desktop/
 npx cap sync android # синхронизировать Android-проект
@@ -113,8 +119,9 @@ docs/           спецификация и отчёты по этапам ра�
 ```
 
 Сборки собираются в GitHub Actions: `android.yml` (APK), `desktop.yml`
-(установщик Windows) и `ios.yml` (IPA, на macOS — на Windows iOS не собрать).
-По тегу `v*` публикуется релиз — оттуда приложения и берут обновления.
+(установщик Windows), `ios.yml` (IPA, на macOS — на Windows iOS не собрать)
+и `web.yml` (сайт на GitHub Pages). По тегу `v*` публикуется релиз — оттуда
+приложения и берут обновления — и выкладывается сайт.
 
 ## Приватность
 
@@ -122,6 +129,8 @@ docs/           спецификация и отчёты по этапам ра�
 - Personal Access Token хранится локально на устройстве и никогда не попадает
   в репозиторий.
 - Проверка обновлений — единственный запрос наружу: публичный GitHub API без токена.
+- Сайт на GitHub Pages — это только файлы приложения. Карточки и токен остаются
+  в браузере на устройстве и уходят только в api.github.com, в ваш репозиторий.
 - Аналитики и телеметрии нет.
 
 ## Документы
