@@ -94,9 +94,9 @@ npm run test:github  # esli trogal lib/github-api-transport.ts (--write — s za
 
 ## Chto ne sdelano
 
-- **Sayt ni razu ne otkryvalsya na zhivom iPhone** — proveren v Chrome na PK
-  (clone, pravka, pull, ofline). Safari, «Na ekran Domoy» i otstupy pod chasy
-  zhdut pervogo progona.
+- **Sayt na iPhone rabotayet** (2026-10-06, so slov pol'zovatelya: ustanovka
+  «Na ekran Domoy», podklyucheniye, sinkhronizatsiya). Otdel'no ne proveryalis'
+  kamera/galereya, ofline i chasy v svetloy teme.
 - **Napominaniya na sayte** prikhodyat, tol'ko poka on otkryt. Polnotsennye —
   tol'ko cherez Web Push s serverom (naprimer, raspisaniye v GitHub Actions).
 
