@@ -1,7 +1,7 @@
 "use client";
 
 import * as git from "isomorphic-git";
-import { gitHttp, isDesktopApp } from "./git-http";
+import { gitHttp, isDesktopApp, setTransportProgress } from "./git-http";
 import { Buffer } from "buffer";
 import { getFS, REPO_ROOT, ensureRepoSkeleton, exists, flushFs, removePath } from "./fs";
 import { GitConfig } from "./types";
@@ -30,14 +30,23 @@ function authFor(cfg: GitConfig): { username: string; password: string } | undef
 }
 
 /**
- * CORS-прокси (вариант B). Без него запросы isomorphic-git к github.com из браузера/
- * Android WebView блокируются CORS. Пустая строка → undefined (прямое соединение).
+ * CORS-прокси из настроек. Пустая строка → undefined (прямое соединение).
  */
 function corsProxyFor(cfg: GitConfig): string | undefined {
-  // В ПК-приложении и в Android-сборке запрос идёт мимо браузерного CORS,
-  // поэтому прокси не нужен даже если он указан в настройках.
-  if (isDesktopApp()) return undefined;
+  // Для github.com прокси не нужен нигде, даже если указан: ПК ходит через IPC,
+  // телефон — через нативный HTTP, сайт — через GitHub API (lib/git-http.ts).
+  if (isDesktopApp() || /^https:\/\/(www\.)?github\.com\//i.test(cfg.remoteUrl)) return undefined;
   return cfg.corsProxy?.trim() ? cfg.corsProxy.trim() : undefined;
+}
+
+/** Сообщения транспорта (сколько файлов качаем) уходят туда же, куда и прогресс операции. */
+async function withProgress<T>(onProgress: ((m: string) => void) | undefined, run: () => Promise<T>): Promise<T> {
+  setTransportProgress(onProgress ?? null);
+  try {
+    return await run();
+  } finally {
+    setTransportProgress(null);
+  }
 }
 
 export async function isInitialized(): Promise<boolean> {
@@ -75,7 +84,7 @@ export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void):
   if (!cfg.remoteUrl) throw new Error("Не задан Git URL");
   await ensureRepoSkeleton();
   onProgress?.("Клонируем репозиторий...");
-  await git.clone({
+  await withProgress(onProgress, () => git.clone({
     fs: fsRef(),
     http: gitHttp,
     dir: REPO_ROOT,
@@ -86,7 +95,7 @@ export async function clone(cfg: GitConfig, onProgress?: (msg: string) => void):
     depth: 1,
     onAuth: () => authFor(cfg) ?? {},
     onMessage: (m) => onProgress?.(m),
-  });
+  }));
   await flushFs();
   repoContentChanged();
   onProgress?.("Готово");
@@ -184,7 +193,7 @@ export async function rebuildLocalRepo(
   await ensureRemote(cfg);
   await configureIdentity(cfg);
 
-  await git.fetch({
+  await withProgress(onProgress, () => git.fetch({
     fs,
     http: gitHttp,
     dir: REPO_ROOT,
@@ -195,7 +204,7 @@ export async function rebuildLocalRepo(
     depth: 1,
     onAuth: () => authFor(cfg) ?? {},
     onMessage: (m) => onProgress?.(m),
-  });
+  }));
 
   // Ставим локальную ветку на удалённую, НЕ трогая рабочие файлы: они и есть
   // актуальные данные, их нужно закоммитить сверху.
@@ -251,14 +260,14 @@ export async function pull(cfg: GitConfig, onProgress?: (m: string) => void): Pr
     onAuth: () => authFor(cfg) ?? {},
     onMessage: (m: string) => onProgress?.(m),
   };
-  await git.pull(opts as unknown as Parameters<typeof git.pull>[0]);
+  await withProgress(onProgress, () => git.pull(opts as unknown as Parameters<typeof git.pull>[0]));
   await flushFs();
   repoContentChanged();
 }
 
 export async function push(cfg: GitConfig, onProgress?: (m: string) => void): Promise<void> {
   onProgress?.("Push...");
-  await git.push({
+  await withProgress(onProgress, () => git.push({
     fs: fsRef(),
     http: gitHttp,
     dir: REPO_ROOT,
@@ -267,7 +276,7 @@ export async function push(cfg: GitConfig, onProgress?: (m: string) => void): Pr
     ref: cfg.branch || "main",
     onAuth: () => authFor(cfg) ?? {},
     onMessage: (m) => onProgress?.(m),
-  });
+  }));
 }
 
 export async function ensureRemote(cfg: GitConfig): Promise<void> {

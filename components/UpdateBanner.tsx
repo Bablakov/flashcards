@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Обновление приложения на Android, iOS и в вебе (§9.4).
+ * Обновление приложения на Android и iOS (§9.4).
  *
  * По просьбе пользователя это не ссылка, а диалог: приложение само скачивает
  * файл с показом процента и сразу отдаёт его системному установщику —
@@ -11,6 +11,7 @@
  * Там диалог объясняет, как поставить .ipa с компьютера, и открывает релиз.
  *
  * В ПК-сборке компонент молчит: там обновление ставит electron-updater.
+ * На сайте тоже: новая версия приезжает сама при следующем открытии.
  */
 
 import { useEffect, useState } from "react";
@@ -32,7 +33,7 @@ export function UpdateBanner() {
   useEffect(() => {
     (async () => {
       const platform = await detectPlatform();
-      if (platform === "desktop") return;
+      if (platform === "desktop" || platform === "web") return;
       setIos(platform === "ios");
       const update = await checkForUpdate();
       if (!update) return;

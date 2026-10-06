@@ -90,9 +90,8 @@ export const GitConfigSchema = z.object({
   email: z.string().default(""),
   token: z.string().default(""),
   /**
-   * URL собственного CORS-прокси (вариант B). GitHub не отдаёт CORS на git-smart-HTTP,
-   * поэтому push/pull из браузера и Android WebView идут через свой прокси.
-   * Пусто = прямое соединение (работает только из нативного git/CapacitorHttp).
+   * URL CORS-прокси — только для своего git-сервера. Для github.com не используется:
+   * ПК и телефон ходят напрямую, сайт — через GitHub API (lib/github-api-transport.ts).
    */
   corsProxy: z.string().default(""),
   autoSync: z.boolean().default(false),

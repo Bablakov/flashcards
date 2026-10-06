@@ -11,12 +11,17 @@
  *    строку или JSON, а git гоняет двоичные пакеты — их нужно передавать base64
  *    с `dataType: "file"`. Плюс патч перехватывал вообще все запросы приложения
  *    и ломал загрузку страниц;
- *  - обычный браузер: штатный веб-клиент isomorphic-git. Здесь CORS никуда не
- *    девается, поэтому нужен свой прокси (поле в настройках).
+ *  - браузер (сайт на GitHub Pages): github.com из браузера закрыт CORS, поэтому
+ *    запросы к нему отвечает lib/github-api-transport.ts через api.github.com —
+ *    без прокси и без посредников. Остальные адреса (свой git-сервер или
+ *    заполненное поле «CORS-прокси») — штатным веб-клиентом isomorphic-git.
  */
 
+import * as git from "isomorphic-git";
 import webHttp from "isomorphic-git/http/web";
 import type { GitHttpRequest, GitHttpResponse, HttpClient } from "isomorphic-git";
+import { getFS, REPO_ROOT } from "./fs";
+import { githubApiRequest, isGithubGitUrl } from "./github-api-transport";
 
 interface DesktopBridge {
   isDesktop: boolean;
@@ -205,12 +210,37 @@ async function nativeRequest(req: GitHttpRequest): Promise<GitHttpResponse> {
   };
 }
 
+let transportProgress: ((message: string) => void) | null = null;
+
+/** Куда сообщать «скачиваем файлов — N» на время clone/pull/push в браузере. */
+export function setTransportProgress(listener: ((message: string) => void) | null): void {
+  transportProgress = listener;
+}
+
+async function hasLocalObject(oid: string): Promise<boolean> {
+  try {
+    await git.readObject({ fs: getFS(), dir: REPO_ROOT, oid, format: "deflated" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const gitHttp: HttpClient = {
   async request(req: GitHttpRequest): Promise<GitHttpResponse> {
     const bridge = desktop();
     if (!bridge) {
       if (await nativePlatform()) {
         return await withTimeout(nativeRequest(req), req.url);
+      }
+      if (isGithubGitUrl(req.url)) {
+        // Тайм-аут здесь у каждого запроса к API свой: clone — это сотни
+        // запросов, и общая минута на всё оборвала бы его на середине.
+        return await githubApiRequest(req, {
+          fetch: window.fetch.bind(window),
+          hasObject: hasLocalObject,
+          onProgress: (m) => transportProgress?.(m),
+        });
       }
       return await withTimeout((webHttp as HttpClient).request(req), req.url);
     }

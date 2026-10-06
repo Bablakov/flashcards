@@ -5,11 +5,18 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { NativeBridge } from "@/components/NativeBridge";
 import { DesktopBridge } from "@/components/DesktopBridge";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { WebAppBridge } from "@/components/WebAppBridge";
+
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 export const metadata: Metadata = {
   title: "Flashcards",
   description: "Редактор флешкарт с Git-синхронизацией",
-  manifest: "/manifest.json",
+  manifest: `${BASE}/manifest.json`,
+  // «На экран Домой» на iPhone: своя иконка без прозрачных углов и запуск
+  // без панелей Safari. Страница рисуется под часами — отступ даёт TopBar.
+  icons: { apple: `${BASE}/apple-touch-icon.png` },
+  appleWebApp: { capable: true, title: "Flashcards", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
@@ -46,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <NativeBridge />
           <DesktopBridge />
+          <WebAppBridge />
           <UpdateBanner />
           {/* На телефоне колонка во всю ширину, на ПК — та же раскладка по центру,
               но на широком экране шире, чтобы списки шли в две колонки, а не

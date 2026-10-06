@@ -20,7 +20,7 @@ const PLATFORM_LABEL: Record<AppPlatform, string> = {
   desktop: "ПК (Electron)",
   android: "Android",
   ios: "iOS",
-  web: "Браузер",
+  web: "Сайт (браузер)",
 };
 
 function formatMoment(iso: string | null): string {
@@ -75,7 +75,7 @@ export function AboutBlock() {
       `Репозиторий: ${cfg.remoteUrl || "не задан"}`,
       `Ветка: ${cfg.branch || "не задана"}`,
       `Токен: ${cfg.token ? `задан, ${cfg.token.length} символов, начинается с ${cfg.token.slice(0, 10)}…` : "НЕ ЗАДАН"}`,
-      `CORS-прокси: ${cfg.corsProxy || "пусто (правильно для ПК, Android и iOS)"}`,
+      `CORS-прокси: ${cfg.corsProxy || "пусто (правильно)"}`,
       `Последняя синхронизация: ${formatMoment(lastSync)}`,
       `Последняя ошибка: ${lastError ?? "нет"}`,
     ].join("\n");

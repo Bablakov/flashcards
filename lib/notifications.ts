@@ -14,7 +14,8 @@
  *    напоминаний не больше семи, по одному на день недели.
  *  - ПК и браузер: Notification API. Уведомление приходит, только пока
  *    приложение запущено, поэтому в десктопной сборке включаются автозапуск
- *    и сворачивание в трей.
+ *    и сворачивание в трей. Сайт на iPhone показывает уведомления только
+ *    через service worker — конструктор Notification там запрещён.
  */
 
 import { AppSettings } from "./model";
@@ -132,6 +133,24 @@ async function scheduleNative(settings: AppSettings): Promise<void> {
 
 /* ------------------------------------------------------------------ web */
 
+/** На сайте — через service worker, если он есть (на iPhone иначе нельзя), на ПК — напрямую. */
+async function showWeb(body: string): Promise<void> {
+  if ((window as unknown as { desktop?: { isDesktop?: boolean } }).desktop?.isDesktop) {
+    new Notification("Flashcards", { body });
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    if (registration) {
+      await registration.showNotification("Flashcards", { body });
+      return;
+    }
+  } catch {
+    // нет service worker — покажем обычным способом
+  }
+  new Notification("Flashcards", { body });
+}
+
 let webTimer: ReturnType<typeof setTimeout> | null = null;
 
 function nextOccurrence(days: Record<string, string>, from = new Date()): Date | null {
@@ -165,7 +184,7 @@ async function scheduleWeb(settings: AppSettings): Promise<void> {
   const delay = Math.min(next.getTime() - Date.now(), 2 ** 31 - 1);
   webTimer = setTimeout(async () => {
     try {
-      new Notification("Flashcards", { body: notificationBody(await dueCount()) });
+      await showWeb(notificationBody(await dueCount()));
     } catch {
       // уведомления могли отключить в системе
     }
@@ -216,15 +235,13 @@ export async function sendTestNotification(delaySeconds = 0): Promise<boolean> {
 
   if (delayMs > 0) {
     setTimeout(() => {
-      try {
-        new Notification("Flashcards", { body });
-      } catch {
+      showWeb(body).catch(() => {
         // уведомления могли отключить в системе
-      }
+      });
     }, delayMs);
     return true;
   }
-  new Notification("Flashcards", { body });
+  await showWeb(body);
   return true;
 }
 

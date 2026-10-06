@@ -19,6 +19,7 @@ import { removePath } from "@/lib/fs";
 import { useTheme } from "@/components/ThemeProvider";
 import { WeekScheduleEditor } from "@/components/WeekSchedule";
 import { AboutBlock } from "@/components/AboutBlock";
+import { detectPlatform } from "@/lib/platform";
 import { AppSettings, AppSettingsSchema, WeekSchedule } from "@/lib/model";
 import { readSettings, writeSettings } from "@/lib/store";
 import {
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const [access, setAccess] = useState<string | null>(null);
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [isWeb, setIsWeb] = useState(false);
   const [schedule, setSchedule] = useState<ScheduleInfo | null>(null);
   const { theme, setTheme } = useTheme();
 
@@ -50,6 +52,7 @@ export default function SettingsPage() {
     void readSettings().then(setApp);
     setDeviceNotifications(enabledOnThisDevice());
     void refreshSchedule();
+    void detectPlatform().then((p) => setIsWeb(p === "web"));
     // Пока идёт автоматическая синхронизация, кнопки гасим.
     const offSync = onSyncStateChange(setBusy);
     const desktop = (window as unknown as {
@@ -303,9 +306,8 @@ export default function SettingsPage() {
                 autoCapitalize="off"
               />
               <p className="hint-text mt-1">
-                Приложению на ПК и на телефоне прокси не нужен: запросы к GitHub идут мимо
-                браузерных ограничений. Поле пригодится, только если открыть приложение как
-                обычный сайт в браузере.
+                Для GitHub прокси не нужен нигде: ПК и телефон ходят туда напрямую, а сайт —
+                через GitHub API. Поле осталось только для своего git-сервера.
               </p>
             </Field>
           </div>
@@ -407,7 +409,11 @@ export default function SettingsPage() {
         <div>
           <WeekScheduleEditor
             title="Напоминания"
-            hint="Локальные уведомления без сервера: работают офлайн. На ПК приходят, пока приложение запущено (в трее), на телефоне — по системному расписанию."
+            hint={
+              isWeb
+                ? "На сайте напоминания приходят, только пока он открыт: браузер не будит страницу по расписанию. Чтобы не пропускать их, держите расписание и на ПК или Android."
+                : "Локальные уведомления без сервера: работают офлайн. На ПК приходят, пока приложение запущено (в трее), на телефоне — по системному расписанию."
+            }
             value={app.notifications as WeekSchedule}
             onChange={(v) => updateApp({ notifications: v })}
           />
