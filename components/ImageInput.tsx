@@ -32,7 +32,8 @@ export function ImageInput({ deckId, imagePath, onPicked, onCleared, label }: Pr
   }, [deckId, imagePath]);
 
   async function pick(capture?: boolean) {
-    // Native (Android-приложение): системная камера / галерея через плагин.
+    // Android и iOS: системная камера / галерея через плагин. На iOS без
+    // описаний доступа в Info.plist приложение упадёт — их дописывает ios.yml.
     if (Capacitor.isNativePlatform()) {
       try {
         const { Camera: CapCamera, CameraResultType, CameraSource } = await import(

@@ -14,21 +14,14 @@ import { toast } from "@/components/Toaster";
 import { loadGitConfig, loadSyncStatus } from "@/lib/settings";
 import { getDeviceId } from "@/lib/device";
 import { checkForUpdate, currentVersion } from "@/lib/updates";
+import { detectPlatform, type AppPlatform } from "@/lib/platform";
 
-type Platform = "ПК (Electron)" | "Android" | "Браузер";
-
-async function detectPlatform(): Promise<Platform> {
-  if ((window as unknown as { desktop?: { isDesktop?: boolean } }).desktop?.isDesktop) {
-    return "ПК (Electron)";
-  }
-  try {
-    const { Capacitor } = await import("@capacitor/core");
-    if (Capacitor.isNativePlatform()) return "Android";
-  } catch {
-    // не Capacitor-сборка
-  }
-  return "Браузер";
-}
+const PLATFORM_LABEL: Record<AppPlatform, string> = {
+  desktop: "ПК (Electron)",
+  android: "Android",
+  ios: "iOS",
+  web: "Браузер",
+};
 
 function formatMoment(iso: string | null): string {
   if (!iso) return "ещё не было";
@@ -38,13 +31,13 @@ function formatMoment(iso: string | null): string {
 }
 
 export function AboutBlock() {
-  const [platform, setPlatform] = useState<Platform | null>(null);
+  const [platform, setPlatform] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    void detectPlatform().then(setPlatform);
+    void detectPlatform().then((p) => setPlatform(PLATFORM_LABEL[p]));
     const status = loadSyncStatus();
     setLastSync(status.lastSyncAt);
     setLastError(status.lastError);
@@ -82,7 +75,7 @@ export function AboutBlock() {
       `Репозиторий: ${cfg.remoteUrl || "не задан"}`,
       `Ветка: ${cfg.branch || "не задана"}`,
       `Токен: ${cfg.token ? `задан, ${cfg.token.length} символов, начинается с ${cfg.token.slice(0, 10)}…` : "НЕ ЗАДАН"}`,
-      `CORS-прокси: ${cfg.corsProxy || "пусто (правильно для ПК и Android)"}`,
+      `CORS-прокси: ${cfg.corsProxy || "пусто (правильно для ПК, Android и iOS)"}`,
       `Последняя синхронизация: ${formatMoment(lastSync)}`,
       `Последняя ошибка: ${lastError ?? "нет"}`,
     ].join("\n");

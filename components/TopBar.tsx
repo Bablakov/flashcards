@@ -17,6 +17,10 @@ interface TopBarProps {
  * по центру заголовок, справа не больше трёх иконок. Переключатель темы живёт
  * только на главной и в настройках — на внутренних экранах он занимал место
  * и мешал заголовку.
+ *
+ * Отступ сверху — под строку состояния и «чёлку» iPhone: страница рисуется
+ * на весь экран (viewport-fit=cover), и без него заголовок уезжал под часы.
+ * На ПК и там, где система сама отодвигает страницу, отступ нулевой.
  */
 export function TopBar({ title, back, rightSlot, hideDefaults }: TopBarProps) {
   const router = useRouter();
@@ -24,8 +28,12 @@ export function TopBar({ title, back, rightSlot, hideDefaults }: TopBarProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center gap-1 bg-bg-base/95 px-2 backdrop-blur"
-      style={{ borderBottom: "1px solid var(--ring-base)" }}
+      className="sticky top-0 z-30 flex items-center gap-1 bg-bg-base/95 px-2 backdrop-blur"
+      style={{
+        borderBottom: "1px solid var(--ring-base)",
+        height: "calc(56px + env(safe-area-inset-top, 0px))",
+        paddingTop: "env(safe-area-inset-top, 0px)",
+      }}
     >
       <div className="flex w-10 flex-shrink-0 items-center">
         {back ? (

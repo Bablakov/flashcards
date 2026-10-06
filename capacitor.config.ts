@@ -7,6 +7,11 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
+  ios: {
+    // Фон WebView до первой отрисовки страницы: без него между заставкой
+    // и приложением мелькал белый экран. Цвет — фон тёмной темы (--bg-base).
+    backgroundColor: "#171717",
+  },
   server: {
     androidScheme: "https",
   },

@@ -1,19 +1,23 @@
 "use client";
 
 /**
- * Обновление приложения на Android и в вебе (§9.4).
+ * Обновление приложения на Android, iOS и в вебе (§9.4).
  *
  * По просьбе пользователя это не ссылка, а диалог: приложение само скачивает
  * файл с показом процента и сразу отдаёт его системному установщику —
  * остаётся только подтвердить установку.
  *
+ * На iPhone так нельзя: приложение не может поставить другое приложение.
+ * Там диалог объясняет, как поставить .ipa с компьютера, и открывает релиз.
+ *
  * В ПК-сборке компонент молчит: там обновление ставит electron-updater.
  */
 
 import { useEffect, useState } from "react";
-import { Download, X } from "lucide-react";
+import { Download, ExternalLink, X } from "lucide-react";
 import { toast } from "@/components/Toaster";
 import { checkForUpdate, downloadAndInstall, type UpdateInfo } from "@/lib/updates";
+import { detectPlatform } from "@/lib/platform";
 
 const DISMISS_KEY = "flashcards.update.dismissed";
 
@@ -23,11 +27,13 @@ export function UpdateBanner() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("offer");
   const [percent, setPercent] = useState(0);
+  const [ios, setIos] = useState(false);
 
   useEffect(() => {
-    const isDesktop = (window as unknown as { desktop?: { isDesktop?: boolean } }).desktop?.isDesktop;
-    if (isDesktop) return;
     (async () => {
+      const platform = await detectPlatform();
+      if (platform === "desktop") return;
+      setIos(platform === "ios");
       const update = await checkForUpdate();
       if (!update) return;
       if (window.localStorage.getItem(DISMISS_KEY) === update.version) return;
@@ -81,10 +87,18 @@ export function UpdateBanner() {
         <div className="space-y-4 p-5">
           {phase === "offer" && (
             <>
-              <p className="text-[14px] leading-relaxed text-text-secondary">
-                Приложение скачает обновление само, а затем предложит его установить.
-                Данные и настройки останутся на месте.
-              </p>
+              {ios ? (
+                <p className="text-[14px] leading-relaxed text-text-secondary">
+                  На iPhone обновление ставится с компьютера: скачайте со страницы релиза
+                  файл .ipa и установите его через Sideloadly с тем же Apple ID, что
+                  и в прошлый раз. Данные и настройки останутся на месте.
+                </p>
+              ) : (
+                <p className="text-[14px] leading-relaxed text-text-secondary">
+                  Приложение скачает обновление само, а затем предложит его установить.
+                  Данные и настройки останутся на месте.
+                </p>
+              )}
               {info.notes && (
                 <div className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl bg-bg-soft p-3 text-xs text-text-muted">
                   {info.notes}
@@ -124,7 +138,15 @@ export function UpdateBanner() {
               className="btn-primary py-2"
               onClick={handleInstall}
             >
-              <Download size={16} /> Скачать и установить
+              {ios ? (
+                <>
+                  <ExternalLink size={16} /> Открыть релиз
+                </>
+              ) : (
+                <>
+                  <Download size={16} /> Скачать и установить
+                </>
+              )}
             </button>
           )}
           {phase === "installing" && (

@@ -1,0 +1,136 @@
+name: iOS IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Токен сборки по умолчанию только на чтение — для публикации релиза
+# нужны права на запись содержимого репозитория.
+permissions:
+  contents: write
+
+jobs:
+  build-ipa:
+    # iOS собирается только на macOS: Xcode и CocoaPods есть в образе.
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run model tests
+        run: npm run test:model
+
+      - name: Build Next.js static export
+        run: npm run build
+
+      # Папка ios/ не хранится в репозитории, как и android/: Capacitor создаёт
+      # проект из шаблона и ставит плагины через CocoaPods.
+      - name: Add iOS platform (if missing)
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      # У assets/icon.png прозрачные скруглённые углы: iOS сам скругляет иконку,
+      # а прозрачность заливает белым. Поэтому значок отдаётся как «логотип»
+      # и заливается фоном самой иконки, заставка — фоном тёмной темы.
+      - name: Generate iOS icons
+        run: |
+          mkdir -p ios-assets
+          cp assets/icon.png ios-assets/logo.png
+          npx --yes @capacitor/assets generate --ios --assetPath ios-assets \
+            --iconBackgroundColor "#1a1a1a" \
+            --splashBackgroundColor "#171717" \
+            --splashBackgroundColorDark "#171717"
+        continue-on-error: true
+
+      # Без описаний доступа iOS аварийно закрывает приложение при первом
+      # обращении к камере или фото. Info.plist генерируется Capacitor,
+      # поэтому ключи дописываются здесь, как разрешение на Android.
+      - name: Info.plist permissions
+        run: |
+          PLIST=ios/App/App/Info.plist
+          plutil -replace NSCameraUsageDescription -string "Камера нужна, чтобы сфотографировать картинку для карточки." "$PLIST"
+          plutil -replace NSPhotoLibraryUsageDescription -string "Доступ к фото нужен, чтобы выбрать картинку для карточки." "$PLIST"
+          plutil -replace NSPhotoLibraryAddUsageDescription -string "Доступ к фото нужен, чтобы сохранить снимок для карточки." "$PLIST"
+          plutil -replace ITSAppUsesNonExemptEncryption -bool NO "$PLIST"
+          plutil -lint "$PLIST"
+          plutil -p "$PLIST"
+
+      # Версия как у остальных сборок; номер сборки растёт с каждым запуском.
+      - name: Set version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          PBXPROJ=ios/App/App.xcodeproj/project.pbxproj
+          sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = $VERSION;/" "$PBXPROJ"
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [^;]*;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/" "$PBXPROJ"
+          grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION" "$PBXPROJ"
+
+      # Сборка без подписи: платного аккаунта разработчика Apple нет, а
+      # подписать .ipa бесплатным Apple ID может только тот, кто ставит его
+      # на телефон (Sideloadly / AltStore делают это при установке).
+      - name: Build app
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ios/DerivedData \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      # .ipa — это zip с папкой Payload, внутри которой лежит App.app.
+      - name: Package IPA
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          APP=ios/DerivedData/Build/Products/Release-iphoneos/App.app
+          test -d "$APP"
+          mkdir -p ipa/Payload artifacts
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry "../artifacts/flashcards-$VERSION-${{ github.run_number }}.ipa" Payload)
+          ls -la artifacts
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashcards-ipa
+          path: artifacts/*.ipa
+          retention-days: 30
+
+      # Релиз создаёт сборка Android; iOS докладывает свой файл рядом с APK и .exe.
+      # Из этого релиза приложение на iPhone и узнаёт об обновлении.
+      - name: Attach IPA to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 40); do
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then break; fi
+            echo "жду, пока сборка Android создаст релиз ($i)"
+            sleep 15
+          done
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" artifacts/*.ipa --clobber

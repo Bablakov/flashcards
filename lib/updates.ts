@@ -7,9 +7,13 @@
  * проверка идёт без токена: обычный запрос к GitHub API. Без интернета просто
  * молча пропускается — приложение работает офлайн.
  *
- * ПК обновляется сам через electron-updater, здесь — Android и веб: показываем
- * плашку и ведём на скачивание APK.
+ * ПК обновляется сам через electron-updater, здесь — Android, iOS и веб:
+ * показываем плашку. Android скачивает APK и сам открывает установщик; iOS так
+ * не умеет — приложение не может поставить другое приложение, поэтому там
+ * ведём на страницу релиза, а .ipa ставится с компьютера (см. SETUP-USER.md).
  */
+
+import { detectPlatform } from "./platform";
 
 const RELEASES_API = "https://api.github.com/repos/Bablakov/flashcards/releases/latest";
 const LAST_CHECK_KEY = "flashcards.update.lastCheck";
@@ -19,6 +23,7 @@ export interface UpdateInfo {
   version: string;
   url: string;
   apkUrl: string | null;
+  ipaUrl: string | null;
   notes: string;
 }
 
@@ -48,23 +53,20 @@ interface GithubRelease {
  * Скачивание APK с показом процента и запуск установки (§9.4).
  *
  * На Android файл кладётся в кэш приложения и открывается системным
- * установщиком — пользователю остаётся подтвердить установку. В остальных
- * случаях просто открываем ссылку: там обновление ставится иначе.
+ * установщиком — пользователю остаётся подтвердить установку. На iOS
+ * открываем страницу релиза в Safari, в браузере — ссылку на файл.
  */
 export async function downloadAndInstall(
   update: UpdateInfo,
   onProgress?: (percent: number) => void,
 ): Promise<"installing" | "opened"> {
-  const url = update.apkUrl ?? update.url;
-  let native = false;
-  try {
-    const { Capacitor } = await import("@capacitor/core");
-    native = Capacitor.isNativePlatform();
-  } catch {
-    native = false;
+  const platform = await detectPlatform();
+  if (platform === "ios") {
+    window.open(update.url, "_blank");
+    return "opened";
   }
-  if (!native || !update.apkUrl) {
-    window.open(url, "_blank");
+  if (platform !== "android" || !update.apkUrl) {
+    window.open(update.apkUrl ?? update.url, "_blank");
     return "opened";
   }
 
@@ -133,11 +135,17 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     const release = (await res.json()) as GithubRelease;
     const tag = release.tag_name ?? "";
     if (!tag || !isNewer(tag, currentVersion())) return null;
-    const apk = release.assets?.find((a) => (a.name ?? "").toLowerCase().endsWith(".apk"));
+    const asset = (ext: string) =>
+      release.assets?.find((a) => (a.name ?? "").toLowerCase().endsWith(ext))?.browser_download_url ?? null;
+    const ipaUrl = asset(".ipa");
+    // Сборка iOS идёт дольше остальных и докладывает .ipa в релиз последней:
+    // без файла предлагать iPhone обновление не с чем.
+    if (!ipaUrl && (await detectPlatform()) === "ios") return null;
     return {
       version: tag.replace(/^v/, ""),
       url: release.html_url ?? "",
-      apkUrl: apk?.browser_download_url ?? null,
+      apkUrl: asset(".apk"),
+      ipaUrl,
       notes: (release.body ?? "").slice(0, 400),
     };
   } catch {

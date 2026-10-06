@@ -6,7 +6,7 @@
  *  - ПК (Electron): запрос уходит по IPC в главный процесс и выполняется обычным
  *    сетевым стеком Node. Браузерного CORS там нет — сторонний прокси не нужен,
  *    токен не покидает устройство;
- *  - Android (Capacitor): запрос уходит через нативный HTTP-плагин ЯВНЫМ вызовом.
+ *  - Android и iOS (Capacitor): запрос уходит через нативный HTTP-плагин ЯВНЫМ вызовом.
  *    Глобальный патч fetch для этого не годится: нативный слой принимает только
  *    строку или JSON, а git гоняет двоичные пакеты — их нужно передавать base64
  *    с `dataType: "file"`. Плюс патч перехватывал вообще все запросы приложения
@@ -161,7 +161,7 @@ async function collectBody(body: GitHttpRequest["body"]): Promise<Uint8Array | u
 let nativeChecked = false;
 let isNative = false;
 
-/** Capacitor есть только в APK; в браузере и в ПК-сборке ветка не используется. */
+/** Capacitor есть только в APK и IPA; в браузере и в ПК-сборке ветка не используется. */
 async function nativePlatform(): Promise<boolean> {
   if (nativeChecked) return isNative;
   nativeChecked = true;
@@ -175,9 +175,11 @@ async function nativePlatform(): Promise<boolean> {
 }
 
 /**
- * Android: явный вызов нативного HTTP. Тело запроса уходит base64 с
+ * Android и iOS: явный вызов нативного HTTP. Тело запроса уходит base64 с
  * `dataType: "file"` (иначе двоичный пакет git испортится при конвертации
  * в строку), ответ забираем как arraybuffer — плагин отдаёт его тоже base64.
+ * На iOS плагин разбирает ответ как JSON только при Content-Type
+ * application/json, а у ответов git он свой — так что base64 приходит и там.
  */
 async function nativeRequest(req: GitHttpRequest): Promise<GitHttpResponse> {
   const { CapacitorHttp } = await import("@capacitor/core");

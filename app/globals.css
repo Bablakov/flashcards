@@ -250,7 +250,8 @@
   /* --------------------------------------------------------- всплывающее */
 
   .modal-backdrop {
-    @apply fixed inset-0 z-40 flex items-end justify-center bg-black/60 px-3 pb-3 backdrop-blur-sm sm:items-center sm:pb-0;
+    /* Нижний лист не должен ложиться на полосу «домой» iPhone и жестовую полосу Android. */
+    @apply fixed inset-0 z-40 flex items-end justify-center bg-black/60 px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] backdrop-blur-sm sm:items-center sm:pb-0;
   }
   .modal-panel {
     @apply w-full max-w-md overflow-hidden rounded-[18px];
